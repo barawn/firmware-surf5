@@ -1,0 +1,186 @@
+# Notes:
+# All differential pair inputs require DIFF_TERM = TRUE.
+#CLOCKS and CLOCKENs
+NET "LOCAL_CLK" LOC = "D20" | IOSTANDARD = LVCMOS25;
+NET "LOCAL_OSC_EN" LOC = "E20" | IOSTANDARD = LVCMOS25;
+
+
+#TURF_derived clock for LABs
+NET "FPGA_TURF_SST_N" LOC = "AB20" | IOSTANDARD = LVDS_25   | diff_term=true;
+NET "FPGA_TURF_SST_P" LOC = "AA20" | IOSTANDARD = LVDS_25   | diff_term=true;
+
+
+# External trigger - externally 50 ohm terminated - 2.5V bank
+# Actually 100 ohm terminated.
+NET "EXT_TRIG" LOC = "P8" | IOSTANDARD = LVCMOS25;
+
+#Front Panel LED
+NET "FP_LED" LOC = "G5" | IOSTANDARD = LVCMOS25;
+
+# SPI flash
+NET "SPI_CS_neg" LOC = "P18" | IOSTANDARD = LVCMOS25;
+NET "SPI_D0_MOSI" LOC = "R14" | IOSTANDARD = LVCMOS25;
+NET "SPI_D1_MISO" LOC = "R15" | IOSTANDARD = LVCMOS25;
+
+# FPGA_SST_P/FPGA_SST_N are outputs from the FPGA to the
+# CDCLVD1212 clock fanout, for use when a TURF is not
+# present (or some other problem). To use this clock at the
+# LAB4s, FPGA_SST_SEL must be 0.
+NET "FPGA_SST_N" LOC = "AC21" | IOSTANDARD = LVDS_25   ;
+NET "FPGA_SST_P" LOC = "AB21" | IOSTANDARD = LVDS_25   ;
+# If 1: LAB4 SST is TURF_SST_P/N.
+# If 0: LAB4 SST is FPGA_SST_P/N.
+# If Hi-Z: No LAB4 SST. Start up in Hi-Z!
+NET "FPGA_SST_SEL" LOC = "R18" | IOSTANDARD = LVCMOS25;
+
+#LEDs. Bidirs.
+NET "LED<0>" LOC = "E22" | IOSTANDARD = LVCMOS25;
+NET "LED<1>" LOC = "F20" | IOSTANDARD = LVCMOS25;
+NET "LED<2>" LOC = "G19" | IOSTANDARD = LVCMOS25;
+NET "LED<3>" LOC = "F19" | IOSTANDARD = LVCMOS25;
+
+
+#MONITORING PINS
+NET "MON<0>" LOC = "G17" | IOSTANDARD = LVCMOS25;
+NET "MON<1>" LOC = "E18" | IOSTANDARD = LVCMOS25;
+NET "MON<2>" LOC = "H17" | IOSTANDARD = LVCMOS25;
+NET "MON<3>" LOC = "H16" | IOSTANDARD = LVCMOS25;
+NET "MON<4>" LOC = "G16" | IOSTANDARD = LVCMOS25;
+
+#PCI SIGNALS
+NET "pci_ad<0>" LOC = "AE5" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<1>" LOC = "AD5" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<10>" LOC = "Y6" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<11>" LOC = "AC6" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<12>" LOC = "AB6" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<13>" LOC = "Y5" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<14>" LOC = "AA5" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<15>" LOC = "W6" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<16>" LOC = "V6" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<17>" LOC = "V7" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<18>" LOC = "W4" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<19>" LOC = "AC3" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<2>" LOC = "AD4" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<20>" LOC = "AD1" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<21>" LOC = "U7" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<22>" LOC = "AB1" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<23>" LOC = "AB2" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<24>" LOC = "Y3" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<25>" LOC = "AA2" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<26>" LOC = "AA3" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<27>" LOC = "W1" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<28>" LOC = "W3" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<29>" LOC = "Y1" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<3>" LOC = "AC4" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<30>" LOC = "Y2" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<31>" LOC = "V3" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<4>" LOC = "AF5" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<5>" LOC = "AA8" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<6>" LOC = "AD3" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<7>" LOC = "AF4" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<8>" LOC = "AA7" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_ad<9>" LOC = "Y8" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_cbe<0>" LOC = "Y7" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_cbe<1>" LOC = "AE3" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_cbe<2>" LOC = "V4" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_cbe<3>" LOC = "AC2" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "PCI_CLK" LOC = "AA4" | IOSTANDARD = PCI33_3;
+NET "pci_devsel" LOC = "AF2" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_frame" LOC = "W8" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_gnt" LOC = "AB5" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_idsel" LOC = "AC1" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_inta" LOC = "V1" | IOSTANDARD = PCI33_3;
+NET "pci_irdy" LOC = "W5" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_par" LOC = "AF3" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_perr" LOC = "AE2" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_req" LOC = "V9" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_rst" LOC = "V2" | IOSTANDARD = PCI33_3;
+NET "pci_serr" LOC = "AB4" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_stop" LOC = "AE1" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+NET "pci_trdy" LOC = "V8" | IOSTANDARD = PCI33_3 | TNM = PCI_GROUP;
+
+TIMEGRP "PCI_GROUP" OFFSET = IN 7 ns BEFORE "pci_clk" RISING;
+TIMEGRP "PCI_GROUP" OFFSET = OUT 11 ns AFTER "pci_clk" RISING;
+
+
+# TD_N[7:0] are transmitting.
+NET "TD_N<0>" LOC = "AE21" | IOSTANDARD = LVDS_25  ;
+NET "TD_N<1>" LOC = "AF22" | IOSTANDARD = LVDS_25  ;
+NET "TD_N<2>" LOC = "AF23" | IOSTANDARD = LVDS_25  ;
+NET "TD_N<3>" LOC = "AC23" | IOSTANDARD = LVDS_25  ;
+NET "TD_N<4>" LOC = "AD24" | IOSTANDARD = LVDS_25  ;
+NET "TD_N<5>" LOC = "AF25" | IOSTANDARD = LVDS_25  ;
+NET "TD_N<6>" LOC = "AE26" | IOSTANDARD = LVDS_25  ;
+NET "TD_N<7>" LOC = "AD26" | IOSTANDARD = LVDS_25  ;
+NET "TD_P<0>" LOC = "AD21" | IOSTANDARD = LVDS_25  ;
+NET "TD_P<1>" LOC = "AE22" | IOSTANDARD = LVDS_25  ;
+NET "TD_P<2>" LOC = "AE23" | IOSTANDARD = LVDS_25  ;
+NET "TD_P<3>" LOC = "AC22" | IOSTANDARD = LVDS_25  ;
+NET "TD_P<4>" LOC = "AD23" | IOSTANDARD = LVDS_25  ;
+NET "TD_P<5>" LOC = "AF24" | IOSTANDARD = LVDS_25  ;
+NET "TD_P<6>" LOC = "AE25" | IOSTANDARD = LVDS_25  ;
+NET "TD_P<7>" LOC = "AD25" | IOSTANDARD = LVDS_25  ;
+# Source-synchronous clock for TD_P/N[7:0];
+NET "SCLK_N" LOC = "AF20"  | IOSTANDARD = LVDS_25;
+NET "SCLK_P" LOC = "AF19"  | IOSTANDARD = LVDS_25;
+
+# PPS inputs.
+NET "PPS_N" LOC = "AE20" | IOSTANDARD = LVDS_25; 
+NET "PPS_P" LOC = "AD20" | IOSTANDARD = LVDS_25;
+# Buffer hold. Note that this is not a digitize request, which
+# comes in over the data bus.
+NET "HOLD<0>" LOC = "AA18" | IOSTANDARD = LVCMOS25; 
+NET "HOLD<1>" LOC = "Y18" | IOSTANDARD = LVCMOS25;
+NET "HOLD<2>" LOC = "Y17" | IOSTANDARD = LVCMOS25;
+NET "HOLD<3>" LOC = "AA17" | IOSTANDARD = LVCMOS25;
+
+# TCLK_P/N, and SREQ/TREQ 'somehow' become the TURF-to-SURF control data path.
+# Probably TCLK_P/N will be a bus clock, and SREQ/TREQ will be single ended
+# serial datapaths. 
+NET "TCLK_N" LOC = "AD19"  | IOSTANDARD = LVDS_25   | diff_term=true; 
+NET "TCLK_P" LOC = "AC19"  | IOSTANDARD = LVDS_25   | diff_term=true; 
+NET "SREQ_neg" LOC = "AA19" | IOSTANDARD = LVCMOS25; #from TURF
+NET "TREQ_neg" LOC = "AB19" | IOSTANDARD = LVCMOS25; #from TURF
+
+# Leave off the MGT transceivers for now.
+#NET "TMGT_CLK_N" LOC = "AB11" | IOSTANDARD = LVDS_25   | diff_term=true;
+#NET "TMGT_CLK_P" LOC = "AA11" | IOSTANDARD = LVDS_25   | diff_term=true;
+#NET "TMGT_TX_N" LOC = "AF9" | IOSTANDARD = LVDS_25  ; 
+#NET "TMGT_TX_P" LOC = "AE9" | IOSTANDARD = LVDS_25  ; 
+#NET "TMGT_RX_N" LOC = "AF13" | IOSTANDARD = LVDS_25  ; | diff_term=true;
+#NET "TMGT_RX_P" LOC = "AE13" | IOSTANDARD = LVDS_25  ; | diff_term=true;
+# If you uncomment this, it won't work, which is good, as I don't know yet.
+#NET "TMGT_CLK_N" PERIOD = XXX ns;
+
+NET "UC_SCL" LOC = "AD18" | IOSTANDARD = LVCMOS25;
+NET "UC_SDA" LOC = "AE18" | IOSTANDARD = LVCMOS25;
+
+NET "PCI_CLK" PERIOD = 30.303 ns; # PCI_CLK - f=33MHz
+NET "LOCAL_CLK"  PERIOD = 40.0 ns | CLOCK_DEDICATED_ROUTE = "FALSE"; # Local clock - f=25MHz
+NET "FPGA_TURF_SST_N"  PERIOD = 40.0 ns; # Clock for LABs - from TURF - f=25MHz
+
+NET "wbc_clk" TNM_NET = "TN_WBC";
+NET "sys_clk" TNM_NET = "TN_SYS";
+
+TIMESPEC TS_FROM_WBC_TO_SYS = FROM TN_WBC TO TN_SYS 15 ns DATAPATHONLY;
+TIMESPEC TS_FROM_SYS_TO_WBC = FROM TN_SYS TO TN_WBC 15 ns DATAPATHONLY;
+
+
+#NET "u_lab4/load_internal_done" TIG;
+#
+##LM: these are for wb-to-sys clock crossing to avoid hold violation- all
+## these signals should be up for long enough in the common operation
+#NET "u_lab4/general_control_value<*>" TIG;
+#NET "u_lab4/DAC_address<*>" TIG;
+#NET "u_lab4/DAC_value<*>" TIG;
+#NET "u_lab4/LAB4_choice<*>" TIG;
+#NET "u_lab4/do_OTHER_command" TIG;
+#NET "u_lab4/common_command_OTHERS<*>" TIG;
+#NET "u_lab4/LAB4_choice<*>" TIG;
+#NET "u_lab4/REBOOT_address<*>" TIG;
+#NET "u_lab4/SPI_N_words<*>" TIG;
+#NET "u_lab4/data_bank_0" TIG;
+#NET "u_lab4/desired_bank<*>" TIG;
+#
+#NET "u_surf4_id_ctrl/reset_reg*" TNM_NET = "TN_ICE40_RESET";
+#TIMESPEC TS_reset_false_path = FROM "TN_ICE40_RESET" TIG;

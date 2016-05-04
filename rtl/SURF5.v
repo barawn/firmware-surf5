@@ -87,13 +87,7 @@ module SURF5(
 		// SPI.
 		output			SPI_CS_neg,
 		output			SPI_D0_MOSI,
-		input 			SPI_D1_MISO,
-		
-		// Analog inputs
-		input				MGT1V_P,
-		input				MGT1V_N,
-		input				MGT1P2_P,
-		input				MGT1P2_N	
+		input 			SPI_D1_MISO
 	 );
    
 	localparam [3:0] BOARDREV = 4'h0;

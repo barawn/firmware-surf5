@@ -16,8 +16,8 @@ module wbc_intercon(
 		output [70:0] debug_o
     );
 
-	localparam [19:0] S4_ID_CTRL_BASE = 20'h00000;
-	localparam [19:0] S4_ID_CTRL_MASK = 20'h0FFFF;
+	localparam [19:0] S5_ID_CTRL_BASE = 20'h00000;
+	localparam [19:0] S5_ID_CTRL_MASK = 20'h0FFFF;
 	localparam [19:0] HKSC_BASE		 = 20'h10000;
 	localparam [19:0] HKSC_MASK	    = 20'h0FFFF;
 	localparam [19:0] RFP_BASE_1		 = 20'h20000; // 0010, 0011, 0100, 0101, 0110, and 0111 all match. So we split in 2.
@@ -73,18 +73,10 @@ module wbc_intercon(
 		assign prefix``_dat_o = dat_o;							\
 		assign prefix``_sel_o = sel
 	
-/*	wire sel_s4_id_ctrl = ((adr & ~S4_ID_CTRL_MASK) == S4_ID_CTRL_BASE);
-	assign s4_id_ctrl_cyc_o = cyc && sel_s4_id_ctrl;
-	assign s4_id_ctrl_stb_o = stb && sel_s4_id_ctrl;
-	assign s4_id_ctrl_we_o = we;
-	assign s4_id_ctrl_adr_o = (adr - S4_ID_CTRL_BASE);
-	assign s4_id_ctrl_dat_o = dat_o;
-	assign s4_id_ctrl_sel_o = sel;
-*/
 // All of these compares should become simple:
-// s4_id_ctrl should map down to 
+// s5_id_ctrl should map down to 
 // [19:16] == 0000.
-	`SLAVE_MAP( s4_id_ctrl, S4_ID_CTRL_MASK, S4_ID_CTRL_BASE );
+	`SLAVE_MAP( s5_id_ctrl, S5_ID_CTRL_MASK, S5_ID_CTRL_BASE );
 	`SLAVE_MAP( hksc, HKSC_MASK, HKSC_BASE );
 // RFP is not one contiguous power-of-2 space, so we can't use the
 // macro. The address conversion is a little complicated: we span
@@ -133,10 +125,10 @@ module wbc_intercon(
 			muxed_rty <= hksc_rty_i;
 			muxed_dat_i <= hksc_dat_i;
 		end else begin
-			muxed_ack <= s4_id_ctrl_ack_i;
-			muxed_err <= s4_id_ctrl_err_i;
-			muxed_rty <= s4_id_ctrl_rty_i;
-			muxed_dat_i <= s4_id_ctrl_dat_i;
+			muxed_ack <= s5_id_ctrl_ack_i;
+			muxed_err <= s5_id_ctrl_err_i;
+			muxed_rty <= s5_id_ctrl_rty_i;
+			muxed_dat_i <= s5_id_ctrl_dat_i;
 		end
 	end
 	
