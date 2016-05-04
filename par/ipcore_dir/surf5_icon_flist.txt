@@ -1,0 +1,16 @@
+# Output products list for <surf5_icon>
+surf5_icon.asy
+surf5_icon.constraints\surf5_icon.ucf
+surf5_icon.constraints\surf5_icon.xdc
+surf5_icon.gise
+surf5_icon.ngc
+surf5_icon.sym
+surf5_icon.ucf
+surf5_icon.v
+surf5_icon.veo
+surf5_icon.xco
+surf5_icon.xdc
+surf5_icon.xise
+surf5_icon_flist.txt
+surf5_icon_readme.txt
+surf5_icon_xmdf.tcl

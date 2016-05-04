@@ -1,0 +1,19 @@
+# Output products list for <surf5_ila>
+_xmsgs\pn_parser.xmsgs
+surf5_ila.asy
+surf5_ila.cdc
+surf5_ila.constraints\surf5_ila.ucf
+surf5_ila.constraints\surf5_ila.xdc
+surf5_ila.gise
+surf5_ila.ncf
+surf5_ila.ngc
+surf5_ila.sym
+surf5_ila.ucf
+surf5_ila.v
+surf5_ila.veo
+surf5_ila.xco
+surf5_ila.xdc
+surf5_ila.xise
+surf5_ila_flist.txt
+surf5_ila_readme.txt
+surf5_ila_xmdf.tcl
