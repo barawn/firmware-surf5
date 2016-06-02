@@ -5,27 +5,27 @@
 module wbc_intercon(
 		input clk_i,
 		input rst_i,
+		// Masters.
 		`WBS_NAMED_PORT(pcic, 32, 20, 4),
 		`WBS_NAMED_PORT(turfc, 32, 20, 4),
 		`WBS_NAMED_PORT(hkmc, 32, 20, 4),
 		`WBS_NAMED_PORT(wbvio, 32, 20, 4),
+		// Slaves.
 		`WBM_NAMED_PORT(s5_id_ctrl, 32, 16, 4),
-		`WBM_NAMED_PORT(hksc, 32, 16, 4),
-		`WBM_NAMED_PORT(rfp, 32, 19, 4),
-		`WBM_NAMED_PORT(lab4, 32, 19, 4),
+		`WBM_NAMED_PORT(l4_ctrl, 32, 16, 4),
+		`WBM_NAMED_PORT(l4_ram, 32, 16, 4),
+		`WBM_NAMED_PORT(rfp, 32, 16, 4),
 		output [70:0] debug_o
     );
 
 	localparam [19:0] S5_ID_CTRL_BASE = 20'h00000;
-	localparam [19:0] S5_ID_CTRL_MASK = 20'h0FFFF;
-	localparam [19:0] HKSC_BASE		 = 20'h10000;
-	localparam [19:0] HKSC_MASK	    = 20'h0FFFF;
-	localparam [19:0] RFP_BASE_1		 = 20'h20000; // 0010, 0011, 0100, 0101, 0110, and 0111 all match. So we split in 2.
-	localparam [19:0] RFP_MASK_1		 = 20'h1FFFF; // match 0010, 0011.
-	localparam [19:0] RFP_BASE_2		 = 20'h40000;
-	localparam [19:0]	RFP_MASK_2		 = 20'h3FFFF; // match 0100, 0101, 0110, 0111.
-	localparam [19:0] LAB4_BASE		 = 20'h80000;
-	localparam [19:0] LAB4_MASK		 = 20'h7FFFF; // match 1000-1111.
+	localparam [19:0] S5_ID_CTRL_MASK = 20'hCFFFF;
+	localparam [19:0] L4_CTRL_BASE    = 20'h10000;
+	localparam [19:0] L4_CTRL_MASK	 = 20'hCFFFF;
+	localparam [19:0] L4_RAM_BASE		 = 20'h20000;
+	localparam [19:0] L4_RAM_MASK		 = 20'hCFFFF; 
+	localparam [19:0] RFP_BASE			 = 20'h30000;
+	localparam [19:0]	RFP_MASK			 = 20'hCFFFF;
 	
 	wire pcic_gnt;
 	wire turfc_gnt;
@@ -63,7 +63,8 @@ module wbc_intercon(
 			sel <= pcic_sel_i;
 		end
 	end
-	
+
+	// Match addresses by masking off all mask bits, and comparing to base.
 	`define SLAVE_MAP(prefix, mask, base)						\
 		wire sel_``prefix = ((adr & ~ mask ) == base );		\
 		assign prefix``_cyc_o = cyc && sel_``prefix ;		\
@@ -72,36 +73,11 @@ module wbc_intercon(
 		assign prefix``_adr_o = (adr & mask );					\
 		assign prefix``_dat_o = dat_o;							\
 		assign prefix``_sel_o = sel
-	
-// All of these compares should become simple:
-// s5_id_ctrl should map down to 
-// [19:16] == 0000.
+
 	`SLAVE_MAP( s5_id_ctrl, S5_ID_CTRL_MASK, S5_ID_CTRL_BASE );
-	`SLAVE_MAP( hksc, HKSC_MASK, HKSC_BASE );
-// RFP is not one contiguous power-of-2 space, so we can't use the
-// macro. The address conversion is a little complicated: we span
-// 0x20000 - 0x7FFFF, and we want to map that to
-// 0x00000 - 0x5FFFF.
-// 010 -> 000
-// 011 -> 001
-// 100 -> 010
-// 101 -> 011
-// 110 -> 100
-// 111 -> 101
-// which is just
-// 01 -> 00
-// 10 -> 01
-// 11 -> 10 
-// or ((a & b), a)
-	wire sel_rfp = ((adr & ~RFP_MASK_1) == RFP_BASE_1) ||
-					   ((adr & ~RFP_MASK_2) == RFP_BASE_2);
-	assign rfp_cyc_o = cyc && sel_rfp;
-	assign rfp_stb_o = stb && sel_rfp;
-	assign rfp_we_o = we && sel_rfp;
-	assign rfp_adr_o = {adr[18] && adr[17], adr[18],adr[16:0]};
-	assign rfp_dat_o = dat_o;
-	assign rfp_sel_o = sel;	
-	`SLAVE_MAP( lab4, LAB4_MASK, LAB4_BASE );
+	`SLAVE_MAP( l4_ctrl, L4_CTRL_MASK, L4_CTRL_BASE );
+	`SLAVE_MAP( l4_ram,  L4_RAM_MASK, L4_RAM_BASE );
+	`SLAVE_MAP( rfp, RFP_MASK, RFP_BASE );
 
 	reg muxed_ack;
 	reg muxed_err;
@@ -109,21 +85,21 @@ module wbc_intercon(
 	reg [31:0] muxed_dat_i;
 
 	always @(*) begin
-		if (sel_lab4) begin
-			muxed_ack <= lab4_ack_i;
-			muxed_err <= lab4_err_i;
-			muxed_rty <= lab4_rty_i;
-			muxed_dat_i <= lab4_dat_i;
+		if (sel_l4_ram) begin
+			muxed_ack <= l4_ram_ack_i;
+			muxed_err <= l4_ram_err_i;
+			muxed_rty <= l4_ram_rty_i;
+			muxed_dat_i <= l4_ram_dat_i;
 		end else if (sel_rfp) begin
 			muxed_ack <= rfp_ack_i;
 			muxed_err <= rfp_err_i;
 			muxed_rty <= rfp_rty_i;
 			muxed_dat_i <= rfp_dat_i;
-		end else if (sel_hksc) begin
-			muxed_ack <= hksc_ack_i;
-			muxed_err <= hksc_err_i;
-			muxed_rty <= hksc_rty_i;
-			muxed_dat_i <= hksc_dat_i;
+		end else if (sel_l4_ctrl) begin
+			muxed_ack <= l4_ctrl_ack_i;
+			muxed_err <= l4_ctrl_err_i;
+			muxed_rty <= l4_ctrl_rty_i;
+			muxed_dat_i <= l4_ctrl_dat_i;
 		end else begin
 			muxed_ack <= s5_id_ctrl_ack_i;
 			muxed_err <= s5_id_ctrl_err_i;

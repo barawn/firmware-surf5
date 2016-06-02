@@ -60,7 +60,11 @@ module surf5_id_ctrl(
 		input [11:0] internal_led_i,
 
 		output sys_clk_o,
+		output sys_clk_div4_flag_o,
+		output sys_clk_div4_o,
 		output local_clk_o,
+		
+		output wclk_o,
 		
 		// PPS.
 		input PPS,
@@ -100,6 +104,12 @@ module surf5_id_ctrl(
 		reg [31:0] spiss_reg = {32{1'b0}};
 		reg internal_ack = 0;
 		
+		reg toggle_sysclk_div4 = 0;
+		reg [1:0] toggle_sysclk_div4_in_sysclk = {2{1'b0}};
+		reg toggle_edge_detect_in_sysclk = 0;
+		reg delay_edge_detect = 0;
+		reg sys_clk_div4_flag = 0;
+		
 		wire [31:0] pll_drp_dat_o; 
 		wire pll_drp_select = (wb_adr_i[9]);
 
@@ -111,12 +121,11 @@ module surf5_id_ctrl(
 		wire spi_cyc = wb_cyc_i && spi_select;
 		
 		// Sysclk/Wclk generation.
-		wire wclk_p;
-		wire wclk_n;
+		wire wclk_mmcm;
 		wire mmcm_locked;
 		wire mmcm_reset;
 		wire mmcm_fb_out;
-		wire mmcm_fb_in = mmcm_fb_out;
+		wire mmcm_fb_in;
 		wire mmcm_power_down;
 		wire mmcm_clock_select;
 		wire mmcm_clkfbstopped;
@@ -312,6 +321,7 @@ module surf5_id_ctrl(
 		// 
 		wire SST_FB;
 		wire sys_clk_mmcm;
+		wire sys_clk_div4_mmcm;
 		
 		MMCME2_ADV #(
 		.BANDWIDTH("OPTIMIZED"), // Jitter programming ("HIGH","LOW","OPTIMIZED")
@@ -320,9 +330,9 @@ module surf5_id_ctrl(
 		// CLKIN_PERIOD: Input clock period in ns to ps resolution (i.e. 33.333 is 30 MHz).
 		.CLKIN1_PERIOD(40.0),
 		.CLKIN2_PERIOD(40.0),
-		// CLKOUT0_DIVIDE - CLKOUT6_DIVIDE: Divide amount for CLKOUT (1-128)
-		.CLKOUT0_DIVIDE_F(10.0), // Divide amount for CLKOUT0 (1.000-128.000).
-		.CLKOUT1_DIVIDE(5.0),	 // Divide amount for CLKOUT1 (WCLK)
+		.CLKOUT0_DIVIDE_F(10.0), // SYSCLK (100 MHz)
+		.CLKOUT1_DIVIDE(5.0),	 // WCLK (200 MHz)
+		.CLKOUT2_DIVIDE(40.0),	 // SYSCLK_DIV4 (25 MHz)
 		// CLKOUT0_DUTY_CYCLE - CLKOUT6_DUTY_CYCLE: Duty cycle for CLKOUT outputs (0.01-0.99).
 		.CLKOUT0_DUTY_CYCLE(0.5),
 		// CLKOUT0_PHASE - CLKOUT6_PHASE: Phase offset for CLKOUT outputs (-360.000-360.000).
@@ -334,8 +344,8 @@ module surf5_id_ctrl(
 		.STARTUP_WAIT("FALSE")) u_mmcm(	.CLKIN1(FPGA_TURF_SST),
 													.CLKIN2(LOCAL_CLK),
 													.CLKOUT0(sys_clk_mmcm),
-													.CLKOUT1(wclk_p),
-													.CLKOUT1B(wclk_n),
+													.CLKOUT1(wclk_mmcm),
+													.CLKOUT2(sys_clk_div4_mmcm),
 													.LOCKED(mmcm_locked),
 													.RST(mmcm_reset),
 													.PWRDWN(mmcm_power_down),
@@ -345,7 +355,40 @@ module surf5_id_ctrl(
 													.CLKFBSTOPPED(mmcm_clkfbstopped),
 													.CLKINSTOPPED(mmcm_clkinstopped));
 		BUFG u_sysclk(.I(sys_clk_mmcm),.O(sys_clk_o));
-													
+		BUFG u_sysclk_fb(.I(mmcm_fb_out),.O(mmcm_fb_in));
+		BUFG u_sysclk_div4(.I(sys_clk_div4_mmcm),.O(sys_clk_div4_o));
+		BUFG u_wclk(.I(wclk_mmcm),.O(wclk_o));
+		
+		// OK, so this is complicated. First, we generate a toggle flop in the 25 MHz domain.
+		// Just gives us a register to re-register in the 100 MHz domain. Doesn't matter its phase,
+		// we're just looking for edges.
+		always @(posedge sys_clk_div4_o) begin
+			toggle_sysclk_div4 <= ~toggle_sysclk_div4;
+		end
+		always @(posedge sys_clk_o) begin
+			toggle_sysclk_div4_in_sysclk <= {toggle_sysclk_div4_in_sysclk[0],toggle_sysclk_div4};
+			// So when toggle_sysclk_div4_in_sysclk is '01'/'10', that means we are at (first time)
+			// sysclk: _-_-_-_-_-_-_-_-_-_-_-_-_-_-_-_- 
+			//    clk: ________--------________--------
+			// toggle: _________----------------_______
+			// tginsy: 00000000001133333333333333220000
+			// detflg: 00000000000011000000000000110000
+			//   flg1: 00000000000000110000000000001100
+			//   flg2: 00000000000000001100000000000011
+			//
+			// detflg looks for '01' or '10' in the 2-bit shift register.
+			// We then delay that flag 2 cycles, and that then indicates
+			// the *first* cycle in the 4-cycle clock period.
+			// 
+			// Timing analysis should guarantee that the toggle_sysclk_div4 -> toggle_sysclk_div4_in_sysclk
+			// transition happens cleanly, and the clock periods are long enough that it's tough to imagine
+			// skew causing a problem.
+			toggle_edge_detect_in_sysclk <= (toggle_sysclk_div4_in_sysclk == 2'b10 || toggle_sysclk_div4_in_sysclk == 2'b01);
+			delay_edge_detect <= toggle_edge_detect_in_sysclk;
+			sys_clk_div4_flag <= delay_edge_detect;
+		end
+		assign sys_clk_div4_flag_o = sys_clk_div4_flag;
+		
 		// To Do:
 		// -- PPS generation/selection/control.
 		// -- Ext trig generation/selection/control.

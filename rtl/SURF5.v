@@ -90,12 +90,12 @@ module SURF5(
 		input 			SPI_D1_MISO
 	 );
    
-	localparam [3:0] BOARDREV = 4'h0;
-	localparam [3:0] MONTH = 4;
-	localparam [7:0] DAY = 20;
+	localparam [3:0] BOARDREV = 4'h1;
+	localparam [3:0] MONTH = 6;
+	localparam [7:0] DAY = 1;
 	localparam [3:0] MAJOR = 0;
-	localparam [3:0] MINOR = 0;
-	localparam [7:0] REVISION = 1;
+	localparam [3:0] MINOR = 1;
+	localparam [7:0] REVISION = 0;
 	localparam [31:0] VERSION = {BOARDREV, MONTH, DAY, MAJOR, MINOR, REVISION };
 	
 	wire [7:0] TD = {8{1'b0}};
@@ -121,19 +121,16 @@ module SURF5(
 	//
 	// The debugging busses are multiplexed inside the main debug module. Adding more debugging
 	// just means adding more ports to that module (and more select lines on the VIO).
+	
+	// System clock debug.
 	wire [70:0] wbc_debug;
+	// PCI clock debug.
+	wire [70:0] pci_debug;
+	
 	// global_debug is an 8 bit output async output path (it controls any global behavior that has no clock).
 	// global_debug[0] is used for the WISHBONE clock selection.
 	wire [7:0] global_debug;
-	
-	wire [70:0] pci_debug;
-   // Internally there are three main busses: the 'control' WISHBONE bus, which has 3 masters and 4 slaves,
-   // and the 'data' WISHBONE bus, which has 2 masters and 2 slaves, and the LAB4 I2C bus, which has
-   // 12 slaves and 2 masters.
-   // However, these are crossbared busses, so we have an utter bucket-ton of named wires here.
-   // We will probably add a 4th master on the 'control' WISHBONE bus (an I2C-to-WISHBONE bridge to allow the uC
-   // to pull out sensor data - an I2C to WISHBONE slave already exists).
-   
+	   
    // Control WISHBONE bus clock. Probably the PCI clock.
    wire 		  wbc_clk;
    // Control WISHBONE bus reset.
@@ -151,7 +148,6 @@ module SURF5(
    wire [11:0] internal_led;
 	assign internal_led = {12{1'b0}};
 	
-	// Right now no one is using them, so 
    //% Internal interrupts. Up to 31 can be used. 1 is used by SPI core.
    wire [30:0] 	    internal_interrupt;
 	assign internal_interrupt[30:0] = {31{1'b0}};
@@ -159,32 +155,46 @@ module SURF5(
 	
    //% System clock (100 MHz).
    wire 	    sys_clk;
+	//% First clock of the 4 in an SST period.
+	wire		 sys_clk_div4_flag;
+	//% Wilkinson clock (200 MHz).
+	wire		 wclk;
 	//% Local clock (25 MHz).
 	wire 		 local_clk_int;
 	wire		 local_osc_en_int;
-   //% WCLK enable
-	wire [11:0] wclk_en;
 	
-	// WISHBONE control bus. These are all merged into a common bus in the wbc_intercon module.
+	/*
+	 * WISHBONE control bus. This accesses our main register space, which is 20-bits wide.
+	 * Multiple ways to access it:
+	 * 1) PCI
+	 * 2) TURF
+	 * 3) WBVIO bridge
+	 */
+
+	/*
+	 * Masters.
+	 */
 	// pcic: PCI control master port WISHBONE bus.
    `WB_DEFINE( pcic, 32, 20, 4);
    // turfc: TURF control master port WISHBONE bus.
    `WB_DEFINE( turfc, 32, 20, 4);
 	// wbvio: VIO master port WISHBONE bus.
 	`WB_DEFINE(wbvio, 32, 20, 4);
-	
-   // s5_id_ctrl: SURFv5 ID/Control slave port WISHBONE bus.
+	/*
+	 * Slaves.
+	 */
+   // s5_id_ctrl: SURFv5 ID/Control slave port WISHBONE bus. 0x00000-0x0FFFF.
+	// We don't need a lot here.
    `WB_DEFINE( s5_id_ctrl, 32, 16, 4);
-	// Dummy slave 1.
-	`WB_DEFINE( hksc, 32, 16, 4);
-	// Dummy slave 2.
-	`WB_DEFINE( lab4, 32, 19, 4);
+	// LAB4 control. Also don't need a lot here. 0x10000-0x1FFFF.
+	`WB_DEFINE( l4_ctrl, 32, 16, 4);
+	// LAB4 RAM. Screw dense packing, waste the upper 4 bits. Make it 8x2x16-bitsx4k, which is 1 megabit.
+	// On a 32-bit bus, this is 32K addresses. So 0x20000-0x2FFFF.
+	`WB_DEFINE( l4_ram, 32, 19, 4);
 	// Dummy slave 3.
 	`WB_DEFINE( rfp, 32, 19, 4);
 	
 	// Kill the dummy busses.
-	`WBM_KILL( hksc, 32 );
-	`WBM_KILL( lab4, 32 );
 	`WBM_KILL( rfp, 32 );
   
 	// WISHBONE data bus. These aren't merged anywhere yet. Still figuring out best methods.
@@ -295,11 +305,52 @@ module SURF5(
 				`WBS_CONNECT(hkmc, hkmc),
 				`WBS_CONNECT(wbvio, wbvio),
 				`WBM_CONNECT(s5_id_ctrl, s5_id_ctrl),
-				`WBM_CONNECT(hksc, hksc),
+				`WBM_CONNECT(l4_ctrl, l4_ctrl),
+				`WBM_CONNECT(l4_ram, l4_ram),
 				`WBM_CONNECT(rfp, rfp),
-				`WBM_CONNECT(lab4, lab4),
 				.debug_o(wbc_debug));
-   
+
+	// LAB4 controller.
+	// Handles buffer switching, serial control, and readout initialization.
+	wire readout_begin_sysclk;
+	wire [4:0] readout_address_sysclk;
+	wire [3:0] readout_prescale_sysclk;
+	wire readout_complete_sysclk;
+	lab4d_controller u_controller( .clk_i(wbc_clk),.rst_i(wbc_rst),
+											 `WBS_CONNECT(l4_ctrl, wb),
+											 .sys_clk_i(sys_clk),
+											 .sys_clk_div4_flag_i(sys_clk_div4_flag),
+											 .wclk_i(wclk),
+											 .trig_i(trigger_in),
+											 .readout_o(readout_begin_sysclk),
+											 .readout_address_o(readout_address_sysclk),
+											 .prescale_o(readout_prescale_sysclk),
+											 .complete_i(readout_complete_sysclk),
+											 .SIN(SIN),
+											 .SCLK(SCLK),
+											 .PCLK(PCLK),
+											 .REGCLR(REGCLR),
+											 .RAMP(RAMP),
+											 .WCLK_P(WCLK_P),
+											 .WCLK_N(WCLK_N),
+											 .SHOUT(SHOUT),
+											 .WR(WR));
+										 
+	// LAB4 RAM and serial receiver.
+	// The serial receiver just streams out 128x12 bits and writes them into
+	// block RAM connected to the WISHBONE bus.
+	lab4d_ram u_ram( .clk_i(wbc_clk), .rst_i(wbc_rst),
+						  `WBS_CONNECT(l4_ram, wb),
+						  .sys_clk_i(sys_clk),
+						  .readout_i(readout_begin_sysclk),
+						  .prescale_i(readout_prescale_sysclk),
+						  .complete_o(readout_complete_sysclk),
+						  .DOE_LVDS_P(DOE_LVDS_P),
+						  .DOE_LVDS_N(DOE_LVDS_N),
+						  .SS_INCR(SS_INCR),
+						  .SRCLK_P(SRCLK_P),
+						  .SRCLK_N(SRCLK_N));
+						 											    
    // TURFbus. This is the data path back to the TURF.
    // This also needs a slave port definition for the data side bus.
    // Also needs the top-level port connections to the TURFbus.
@@ -320,6 +371,8 @@ module SURF5(
 				 .internal_led_i(internal_led),
 				 // System clock output.
 				 .sys_clk_o(sys_clk),
+				 .sys_clk_div4_flag_o(sys_clk_div4_flag),
+				 .wclk_o(wclk),
 				 // Local clock output (25 MHz).
 				 .local_clk_o(local_clk_int),
 				 // PPS generation, in both domains.
