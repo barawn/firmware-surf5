@@ -42,7 +42,7 @@ module lab4d_trigger_control(
 	reg trigger_ready_clk = 0;
 	reg [5:0] trigger_address_clk = {6{1'b0}};
 	
-	signal_sync u_enable_sync(.in_clkA(enable_i),clkA(clk_i),.out_clkB(enable_sysclk),.clkB(sys_clk_i));
+	signal_sync u_enable_sync(.in_clkA(enable_i),.clkA(clk_i),.out_clkB(enable_sysclk),.clkB(sys_clk_i));
 	signal_sync u_enabled_sync(.in_clkA(enabled_sysclk),.clkA(sys_clk_i),.out_clkB(ready_o),.clkB(clk_i));
 	signal_sync u_busy_sync(.in_clkA(trigger_busy_sysclk),.clkA(sys_clk_i),.out_clkB(trigger_busy_o),.clkB(clk_i));
 	flag_sync u_force_sync(.in_clkA(force_trigger_i),.clkA(clk_i),.out_clkB(force_trigger_sysclk),.clkB(sys_clk_i));
@@ -95,7 +95,7 @@ module lab4d_trigger_control(
 						  .C(sys_clk_i),
 						  .R(!enabled_sysclk),
 						  .Q(WR[5*i+4]));
-			FDRE u_wr4(.D(next_buffer_wr_ptr[0]),
+			FDRE u_wr3(.D(next_buffer_wr_ptr[0]),
 						  .CE(enable_next_buffer),
 						  .C(sys_clk_i),
 						  .R(!enabled_sysclk),
@@ -111,7 +111,7 @@ module lab4d_trigger_control(
 		end
 	endgenerate
 
-	assign trigger_address_o = trigger_address;
+	assign trigger_address_o = trigger_address_clk;
 	assign trigger_busy_o = trigger_ready_clk;
 	
 endmodule

@@ -41,10 +41,10 @@ module lab4d_wilkinson_ramp(
 	flag_sync u_ramp_done_sync(.in_clkA(ramp_done_wclk),.clkA(wclk_i),.out_clkB(ramp_done_o),.clkB(clk_i));
 	
 	localparam FSM_BITS = 2;
-	localparam [FSM_BITS-1:0] IDLE = 0;
-	localparam [FSM_BITS-1:0] RAMP = 1;
-	localparam [FSM_BITS-1:0] WCLK = 2;
-	localparam [FSM_BITS-1:0] DONE = 3;
+	localparam [FSM_BITS-1:0] IDLE 	 = 0;
+	localparam [FSM_BITS-1:0] RAMPING = 1;
+	localparam [FSM_BITS-1:0] WCLK 	 = 2;
+	localparam [FSM_BITS-1:0] DONE    = 3;
 	reg [FSM_BITS-1:0] state_wclk = IDLE;
 	
 	always @(posedge wclk_i) begin
@@ -52,13 +52,13 @@ module lab4d_wilkinson_ramp(
 			ramp_to_wclk_wclk <= ramp_to_wclk_i;
 			wclk_stop_count_wclk <= wclk_stop_count_i;
 		end
-		case (state)
-			IDLE: if (do_ramp_wclk) state_wclk <= RAMP;
-			RAMP: if (counter_wclk == ramp_to_wclk_wclk) state_wclk <= WCLK;
+		case (state_wclk)
+			IDLE: if (do_ramp_wclk) state_wclk <= RAMPING;
+			RAMPING: if (counter_wclk == ramp_to_wclk_wclk) state_wclk <= WCLK;
 			WCLK: if (counter_wclk == wclk_stop_count_wclk) state_wclk <= DONE;
 			DONE: state_wclk <= IDLE;
 		endcase
-		if (state_wclk == RAMP) begin
+		if (state_wclk == RAMPING) begin
 			if (counter_wclk == ramp_to_wclk_wclk) counter_wclk <= {16{1'b0}};
 			else counter_wclk <= counter_wclk + 1;
 		end else if (state_wclk == WCLK) begin
@@ -68,14 +68,14 @@ module lab4d_wilkinson_ramp(
 			counter_wclk <= {16{1'b0}};
 		end
 	end
-	assign ramp_out_wclk = (state_wclk == RAMP || state_wclk == WCLK);
+	assign ramp_out_wclk = (state_wclk == RAMPING || state_wclk == WCLK);
 	assign wilk_out_wclk = (state_wclk == WCLK);
 	assign ramp_done_wclk = (state_wclk == DONE);
 	
 	generate
 		genvar i;
 		for (i=0;i<12;i=i+1) begin : LOOP
-			ODDR #(.INIT(1'b0)) u_ff(.D1(wilk_out)wclk),
+			ODDR #(.INIT(1'b0)) u_ff(.D1(wilk_out),
 											 .D2(1'b0),
 											 .CE(1'b1),
 											 .C(wclk_i),
