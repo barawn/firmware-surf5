@@ -346,5 +346,7 @@ module lab4d_controller(
 	assign register_mux[30] = {32{1'b0}};
 	assign register_mux[31] = pb_bram_data;
 	
-        assign ack_o = ack;
+        assign wb_ack_o = ack;
+        assign wb_err_o = 1'b0;
+        assign wb_rty_o = 0;
 endmodule
