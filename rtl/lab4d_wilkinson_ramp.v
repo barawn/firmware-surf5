@@ -75,7 +75,7 @@ module lab4d_wilkinson_ramp(
 	generate
 		genvar i;
 		for (i=0;i<12;i=i+1) begin : LOOP
-			ODDR #(.INIT(1'b0)) u_ff(.D1(wilk_out),
+			ODDR #(.INIT(1'b0)) u_ff(.D1(wilk_out_wclk),
 											 .D2(1'b0),
 											 .CE(1'b1),
 											 .C(wclk_i),
