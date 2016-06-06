@@ -69,6 +69,28 @@ module SURF5(
 		// Lock buffer. Digitize request comes via TURFbus.
 		input [3:0]   HOLD,
 
+		// LAB4 interface
+		output [11:0]	SCLK,
+		output [11:0]  SIN,
+		output [11:0] 	PCLK,
+		input  [11:0] 	SHOUT,
+		output [11:0]	REGCLR,
+		
+		output [11:0]  RAMP,
+		output [11:0]  WCLK_P,
+		output [11:0]  WCLK_N,
+		
+		output [11:0] SRCLK_P,
+		output [11:0] SRCLK_N,
+		input [11:0] DOE_LVDS_P,
+		input [11:0] DOE_LVDS_N,
+		output [11:0] SS_INCR,
+		
+		output [49:0] WR,
+
+		input [11:0] MONTIMING_P,
+		input [11:0] MONTIMING_N,
+		
 		//Alternate path to (and from) TURF using transceiver
 		/*
 		input 	      TMGT_CLK_N,
