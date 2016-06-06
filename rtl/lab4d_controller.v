@@ -69,7 +69,7 @@ module lab4d_controller(
 	// 31: picoblaze bram
 	
 	wire [31:0] register_mux[31:0];
-	assign wb_dat_o = register_mux[wb_adr_i[4:0]];
+	assign wb_dat_o = register_mux[wb_adr_i[6:2]];
 
         reg ack = 0;
 
@@ -234,39 +234,39 @@ module lab4d_controller(
 			lab4_control_reset_request <= pb_outport[0];
 		end
 		
-		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[4:0] == 5))
+		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:2] == 0x14))
 			test_pattern_request <= wb_dat_i[31];
 		else if (pb_port[4:0] == 5 && pb_write) begin
 			test_pattern_request <= pb_outport[7];
 		end
 		
-		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[4:0] == 6))
+		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:2] == 0x18))
 			lab4_user_write_request <= wb_dat_i[31];
 		else if (pb_port[4:0] == 11 && pb_write) begin
 			lab4_user_write_request <= pb_outport[7];
 		end
 
-		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[4:0] == 3 || wb_adr_i[4:0] == 4)) begin
+		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:2] == 0x0C || wb_adr_i[6:2] == 0x10)) begin
 			update_wilkinson <= 1;
-			if (wb_adr_i[4:0] == 3) ramp_to_wilkinson <= wb_dat_i[15:0];
-			if (wb_adr_i[4:0] == 4) wclk_stop_count <= wb_dat_i[15:0];
+			if (wb_adr_i[6:2] == 0x0C) ramp_to_wilkinson <= wb_dat_i[15:0];
+			if (wb_adr_i[6:2] == 0x10) wclk_stop_count <= wb_dat_i[15:0];
 		end
 
-		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[4:0] == 21)) begin
+		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:2] == 0x54)) begin
 			trigger_clear <= wb_dat_i[0];
 			force_trigger <= wb_dat_i[1];
 		end		
 
-		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[4:0] == 31)) begin
+		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:2] == 0x7C)) begin
 			processor_reset <= wb_dat_i[31];
 			bram_we_enable <= wb_dat_i[30];
 			bram_data_reg <= wb_dat_i[0 +: 18];
 			bram_address_reg <= wb_dat_i[18 +: 10];
 		end
-		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[4:0] == 31)) bram_we <= 1;
+		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:2] == 0x7C)) bram_we <= 1;
 		else bram_we <= 0;
 
-                ack <= wb_cyc_i && wb_sel_i;
+      ack <= wb_cyc_i && wb_sel_i;
 	end
 			
 	lab4d_shift_register u_shift_reg(.clk_i(clk_i),
