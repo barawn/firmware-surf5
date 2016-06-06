@@ -44,7 +44,6 @@ module lab4d_trigger_control(
 	
 	signal_sync u_enable_sync(.in_clkA(enable_i),.clkA(clk_i),.out_clkB(enable_sysclk),.clkB(sys_clk_i));
 	signal_sync u_enabled_sync(.in_clkA(enabled_sysclk),.clkA(sys_clk_i),.out_clkB(ready_o),.clkB(clk_i));
-	signal_sync u_busy_sync(.in_clkA(trigger_busy_sysclk),.clkA(sys_clk_i),.out_clkB(trigger_busy_o),.clkB(clk_i));
 	flag_sync u_force_sync(.in_clkA(force_trigger_i),.clkA(clk_i),.out_clkB(force_trigger_sysclk),.clkB(sys_clk_i));
 	flag_sync u_clear_sync(.in_clkA(trigger_clear_i),.clkA(clk_i),.out_clkB(trigger_clear_sysclk),.clkB(sys_clk_i));
 	flag_sync u_trigger_flag_sync(.in_clkA(trigger_flag_sysclk),.clkA(sys_clk_i),.out_clkB(trigger_flag_clk),.clkB(clk_i));
