@@ -412,6 +412,5 @@ module SURF5(
 							  .rfp_debug_i(rfp_debug),
 							  .global_debug_o(global_debug));
 
-	assign MON = {5{1'b0}};
 	assign SREQ_neg = 1;
 endmodule
