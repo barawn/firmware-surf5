@@ -40,6 +40,12 @@ module lab4d_shift_register(
 		sclk <= (state == SCLK_HIGH);
 		pclk <= (state == PCLK_HIGH || state == SIN_HIGH);
 		
+		if (state == IDLE || prescale_counter == prescale_i) prescale_counter <= {8{1'b0}};
+		else prescale_counter <= prescale_counter + 1;
+		
+		if (state == IDLE) bit_counter <= {5{1'b0}};
+		if (state == SCLK_HIGH && prescale_counter == prescale_i) bit_counter <= bit_counter + 1;
+
 		case (state)
 			IDLE: if (go_i) state <= LOAD;
 			LOAD: if (prescale_counter == prescale_i) state <= SCLK_HIGH;
@@ -59,11 +65,11 @@ module lab4d_shift_register(
 		for (i=0;i<12;i=i+1) begin : LABS
 			assign lab_is_selected[i] = (sel_i == i) || (sel_i == 4'd15);
 			(* IOB = "TRUE" *)
-			FDRE u_sclk(.D(sclk),.C(clk_i),.R(!lab_is_selected),.CE(1'b1),.Q(SCLK[i]));
+			FDRE u_sclk(.D(sclk),.C(clk_i),.R(!lab_is_selected[i]),.CE(1'b1),.Q(SCLK[i]));
 			(* IOB = "TRUE" *)
-			FDRE u_pclk(.D(pclk),.C(clk_i),.R(!lab_is_selected),.CE(1'b1),.Q(PCLK[i]));
+			FDRE u_pclk(.D(pclk),.C(clk_i),.R(!lab_is_selected[i]),.CE(1'b1),.Q(PCLK[i]));
 			(* IOB = "TRUE" *)
-			FDRE u_sin(.D(shift_reg[23]),.C(clk_i),.R(!lab_is_selected),.CE(1'b1),.Q(SIN[i]));
+			FDRE u_sin(.D(shift_reg[23]),.C(clk_i),.R(!lab_is_selected[i]),.CE(1'b1),.Q(SIN[i]));
 		end
 	endgenerate
 	
