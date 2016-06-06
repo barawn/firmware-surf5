@@ -1,0 +1,73 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wave_config>
+   <wave_state>
+   </wave_state>
+   <db_ref_list>
+      <db_ref path="C:/cygwin/home/barawn/repositories/github/firmware-surf5/working/lab4d_shift_register_tb_isim_beh.wdb" id="1" type="auto">
+         <top_modules>
+            <top_module name="glbl" />
+            <top_module name="lab4d_shift_register_tb" />
+         </top_modules>
+      </db_ref>
+   </db_ref_list>
+   <WVObjectSize size="13" />
+   <wave_markers>
+      <marker time="17505100000" label="" />
+   </wave_markers>
+   <wvobject fp_name="/lab4d_shift_register_tb/busy_o" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">busy_o</obj_property>
+      <obj_property name="ObjectShortName">busy_o</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_shift_register_tb/SIN" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">SIN[11:0]</obj_property>
+      <obj_property name="ObjectShortName">SIN[11:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_shift_register_tb/SIN[0]" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">[0]</obj_property>
+      <obj_property name="ObjectShortName">SIN[0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_shift_register_tb/SCLK[0]" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">[0]</obj_property>
+      <obj_property name="ObjectShortName">SCLK[0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_shift_register_tb/PCLK[0]" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">[0]</obj_property>
+      <obj_property name="ObjectShortName">PCLK[0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_shift_register_tb/SCLK" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">SCLK[11:0]</obj_property>
+      <obj_property name="ObjectShortName">SCLK[11:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_shift_register_tb/PCLK" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">PCLK[11:0]</obj_property>
+      <obj_property name="ObjectShortName">PCLK[11:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_shift_register_tb/clk_i" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">clk_i</obj_property>
+      <obj_property name="ObjectShortName">clk_i</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_shift_register_tb/go_i" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">go_i</obj_property>
+      <obj_property name="ObjectShortName">go_i</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_shift_register_tb/dat_i" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">dat_i[23:0]</obj_property>
+      <obj_property name="ObjectShortName">dat_i[23:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_shift_register_tb/sel_i" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">sel_i[3:0]</obj_property>
+      <obj_property name="ObjectShortName">sel_i[3:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_shift_register_tb/prescale_i" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">prescale_i[7:0]</obj_property>
+      <obj_property name="ObjectShortName">prescale_i[7:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_shift_register_tb/uut/state" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">state[2:0]</obj_property>
+      <obj_property name="ObjectShortName">state[2:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+</wave_config>
