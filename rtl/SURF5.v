@@ -86,7 +86,7 @@ module SURF5(
 		input [11:0] DOE_LVDS_N,
 		output [11:0] SS_INCR,
 		
-		output [49:0] WR,
+		output [59:0] WR,
 
 		input [11:0] MONTIMING_P,
 		input [11:0] MONTIMING_N,
