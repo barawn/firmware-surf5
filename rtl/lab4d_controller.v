@@ -71,6 +71,8 @@ module lab4d_controller(
 	wire [31:0] register_mux[31:0];
 	assign wb_dat_o = register_mux[wb_adr_i[4:0]];
 
+        reg ack = 0;
+
 	reg lab4_control_reset_request = 0;
 	reg lab4_runmode_request = 0;
 	reg lab4_runmode = 0;
@@ -263,6 +265,8 @@ module lab4d_controller(
 		end
 		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[4:0] == 31)) bram_we <= 1;
 		else bram_we <= 0;
+
+                ack <= wb_cyc_i && wb_sel_i;
 	end
 			
 	lab4d_shift_register u_shift_reg(.clk_i(clk_i),
@@ -342,4 +346,7 @@ module lab4d_controller(
 	assign register_mux[30] = {32{1'b0}};
 	assign register_mux[31] = pb_bram_data;
 	
+        assign wb_ack_o = ack;
+        assign wb_err_o = 1'b0;
+        assign wb_rty_o = 0;
 endmodule
