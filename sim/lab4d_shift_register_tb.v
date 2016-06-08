@@ -76,6 +76,15 @@ module lab4d_shift_register_tb;
 		go_i = 1;
 		@(posedge clk_i);
 		go_i = 0;
+		@(posedge clk_i);
+		while (busy_o) @(posedge clk_i);
+		@(posedge clk_i);
+		@(posedge clk_i);
+		prescale_i = 0;
+		@(posedge clk_i);
+		go_i = 1;
+		@(posedge clk_i);
+		go_i = 0;
 	end
       
 endmodule
