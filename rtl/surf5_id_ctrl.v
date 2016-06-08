@@ -62,7 +62,6 @@ module surf5_id_ctrl(
 		output sys_clk_o,
 		output sys_clk_div4_flag_o,
 		output sys_clk_div4_o,
-		output local_clk_o,
 		
 		output wclk_o,
 		
@@ -315,8 +314,6 @@ module surf5_id_ctrl(
 
 		assign pci_interrupt_o = |(int_sr_reg & ~int_mask_reg);
 
-		assign local_clk_o = LOCAL_CLK;
-
 		// We just want a multiply by 4, so we'll boost the VCO to 1 GHz and divide by 10.
 		// 
 		wire SST_FB;
@@ -337,7 +334,6 @@ module surf5_id_ctrl(
 		.CLKOUT0_DUTY_CYCLE(0.5),
 		// CLKOUT0_PHASE - CLKOUT6_PHASE: Phase offset for CLKOUT outputs (-360.000-360.000).
 		.CLKOUT0_PHASE(0.0),
-		.COMPENSATION("ZHOLD"), // "ZHOLD", "INTERNAL", "EXTERNAL" or "BUF_IN"
 		.DIVCLK_DIVIDE(1), // Master division value (1-106)		
 		.REF_JITTER1(0.0),
 		.REF_JITTER2(0.0),
