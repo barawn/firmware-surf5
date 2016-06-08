@@ -33,7 +33,8 @@ module lab4d_controller(
 		output [11:0] WCLK_P,
 		output [11:0] WCLK_N,
 		input [11:0] SHOUT,
-		output [59:0] WR		
+		output [59:0] WR,
+		output [70:0] debug_o
     );
 	
 	localparam [3:0] READOUT_PRESCALE_DEFAULT = 4'h0;
@@ -76,8 +77,9 @@ module lab4d_controller(
 	reg lab4_control_reset_request = 0;
 	reg lab4_runmode_request = 0;
 	reg lab4_runmode = 0;
+	reg [11:0] lab4_regclear = {12{1'b0}};
 	wire lab4_running;
-	wire [31:0] lab4_control_register = {{28{1'b0}},lab4_running,lab4_runmode,lab4_runmode_request,lab4_control_reset_request};
+	wire [31:0] lab4_control_register = {{4{1'b0}},lab4_regclear,{12{1'b0}},lab4_running,lab4_runmode,lab4_runmode_request,lab4_control_reset_request};
 
 	reg [3:0] readout_prescale = READOUT_PRESCALE_DEFAULT;
 	wire [31:0] readout_prescale_register = {{28{1'b0}},readout_prescale};
@@ -210,7 +212,7 @@ module lab4d_controller(
 	assign pb_inport[30] = pb_inport[22];
 	assign pb_inport[31] = pb_inport[23];
 	
-	assign lab4_serial_go = (pb_port[4:0] == 19) && pb_write && pb_port[6];
+	assign lab4_serial_go = (pb_port[4:0] == 19) && pb_write && pb_outport[6];
 	
 	always @(posedge clk_i) begin
 		if (ramp_done) ramp_pending <= 0;
@@ -226,18 +228,32 @@ module lab4d_controller(
 			lab4_serial_register[16 +: 8] <= pb_outport;
 		end
 		if (pb_port[4:0] == 17 && pb_write) begin
+			lab4_serial_register[8 +: 8] <= pb_outport;
+		end
+		if (pb_port[4:0] == 16 && pb_write) begin
 			lab4_serial_register[0 +: 8] <= pb_outport;
 		end
 		
 		if (pb_port[4:0] == 0 && pb_write) begin
 			lab4_runmode <= pb_outport[2];
 			lab4_control_reset_request <= pb_outport[0];
+		end else if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:0] == 7'h00))
+			lab4_control_reset_request <= wb_dat_i[0];
+	
+		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:0] == 7'h00)) begin
+			lab4_runmode_request <= wb_dat_i[1];
+			lab4_regclear <= wb_dat_i[16 +: 12];
 		end
 		
 		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:0] == 7'h14))
 			test_pattern_request <= wb_dat_i[31];
 		else if (pb_port[4:0] == 5 && pb_write) begin
 			test_pattern_request <= pb_outport[7];
+		end
+		
+		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:0] == 7'h18)) begin
+			lab4_user_write <= wb_dat_i[0 +: 24];
+			lab4_user_select <= wb_dat_i[24 +: 4];
 		end
 		
 		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:0] == 7'h18))
@@ -268,13 +284,18 @@ module lab4d_controller(
 
       ack <= wb_cyc_i && wb_sel_i;
 	end
-			
+	wire dbg_sin;
+	wire dbg_sclk;
+	wire dbg_pclk;
 	lab4d_shift_register u_shift_reg(.clk_i(clk_i),
 												.go_i(lab4_serial_go),
 												.dat_i(lab4_serial_register),
 												.sel_i(lab4_serial_select),
 												.prescale_i(shift_prescale),
 												.busy_o(lab4_serial_busy),
+												.dbg_sin_o(dbg_sin),
+												.dbg_sclk_o(dbg_sclk),
+												.dbg_pclk_o(dbg_pclk),
 												.SIN(SIN),
 												.SCLK(SCLK),
 												.PCLK(PCLK));
@@ -305,13 +326,13 @@ module lab4d_controller(
 														  .out_port(pb_outport),.port_id(pb_port),
 														  .write_strobe(pb_write),.read_strobe(pb_read),
 														  .interrupt(1'b0), .sleep(1'b0),
-														  .reset(processor_reset),.clk(user_clk_i));
+														  .reset(processor_reset),.clk(clk_i));
 
 	lab4_controller_rom rom(.address(pbAddress),.instruction(pbInstruction),
 											 .enable(pbRomEnable),
 											 .bram_we_i(bram_we && bram_we_enable),.bram_adr_i(bram_address_reg),
 											 .bram_dat_i(bram_data_reg),.bram_dat_o(bram_readback),
-											 .bram_rd_i(1'b1),.clk(user_clk_i));
+											 .bram_rd_i(1'b1),.clk(clk_i));
 	
 	assign register_mux[0] = lab4_control_register;
 	assign register_mux[1] = shift_prescale_register;
@@ -345,6 +366,22 @@ module lab4d_controller(
 	assign register_mux[29] = {32{1'b0}};
 	assign register_mux[30] = {32{1'b0}};
 	assign register_mux[31] = pb_bram_data;
+
+	assign REGCLR = lab4_regclear;
+
+	assign debug_o[0 +: 12] = pbAddress;
+	assign debug_o[12 +: 8] = (pb_write) ? pb_outport : pb_inport_mux;
+	assign debug_o[20] = pb_write;
+	assign debug_o[21] = pb_read;
+	assign debug_o[22 +: 18] = pbInstruction;
+	assign debug_o[40] = lab4_serial_go;
+	assign debug_o[41] = lab4_serial_busy;
+	assign debug_o[42] = dbg_sin;
+	assign debug_o[43] = dbg_sclk;
+	assign debug_o[44] = dbg_pclk;
+	assign debug_o[45] = processor_reset;
+	assign debug_o[46] = bram_we_enable;
+	assign debug_o[47 +: 8] = pb_port;
 	
         assign wb_ack_o = ack;
         assign wb_err_o = 1'b0;
