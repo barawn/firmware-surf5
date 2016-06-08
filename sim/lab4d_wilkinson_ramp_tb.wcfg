@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<wave_config>
+   <wave_state>
+   </wave_state>
+   <db_ref_list>
+      <db_ref path="C:/cygwin/home/barawn/repositories/github/firmware-surf5/working/lab4d_wilkinson_ramp_tb_isim_beh.wdb" id="1" type="auto">
+         <top_modules>
+            <top_module name="glbl" />
+            <top_module name="lab4d_wilkinson_ramp_tb" />
+         </top_modules>
+      </db_ref>
+   </db_ref_list>
+   <WVObjectSize size="12" />
+   <wvobject fp_name="/lab4d_wilkinson_ramp_tb/ramp_done_o" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">ramp_done_o</obj_property>
+      <obj_property name="ObjectShortName">ramp_done_o</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_wilkinson_ramp_tb/RAMP" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">RAMP[11:0]</obj_property>
+      <obj_property name="ObjectShortName">RAMP[11:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_wilkinson_ramp_tb/WCLK_P" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">WCLK_P[11:0]</obj_property>
+      <obj_property name="ObjectShortName">WCLK_P[11:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_wilkinson_ramp_tb/WCLK_N" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">WCLK_N[11:0]</obj_property>
+      <obj_property name="ObjectShortName">WCLK_N[11:0]</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_wilkinson_ramp_tb/clk_i" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">clk_i</obj_property>
+      <obj_property name="ObjectShortName">clk_i</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_wilkinson_ramp_tb/wclk_i" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">wclk_i</obj_property>
+      <obj_property name="ObjectShortName">wclk_i</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_wilkinson_ramp_tb/update_i" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">update_i</obj_property>
+      <obj_property name="ObjectShortName">update_i</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_wilkinson_ramp_tb/ramp_to_wclk_i" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">ramp_to_wclk_i[15:0]</obj_property>
+      <obj_property name="ObjectShortName">ramp_to_wclk_i[15:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_wilkinson_ramp_tb/wclk_stop_count_i" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">wclk_stop_count_i[15:0]</obj_property>
+      <obj_property name="ObjectShortName">wclk_stop_count_i[15:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_wilkinson_ramp_tb/do_ramp_i" type="logic" db_ref_id="1">
+      <obj_property name="ElementShortName">do_ramp_i</obj_property>
+      <obj_property name="ObjectShortName">do_ramp_i</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_wilkinson_ramp_tb/uut/state_wclk" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">state_wclk[1:0]</obj_property>
+      <obj_property name="ObjectShortName">state_wclk[1:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+   <wvobject fp_name="/lab4d_wilkinson_ramp_tb/uut/counter_wclk" type="array" db_ref_id="1">
+      <obj_property name="ElementShortName">counter_wclk[15:0]</obj_property>
+      <obj_property name="ObjectShortName">counter_wclk[15:0]</obj_property>
+      <obj_property name="Radix">HEXRADIX</obj_property>
+   </wvobject>
+</wave_config>
