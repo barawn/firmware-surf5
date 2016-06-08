@@ -25,6 +25,7 @@ module lab4d_wilkinson_ramp(
 
 	parameter [15:0] RAMP_TO_WCLK_DEFAULT = {16{1'b0}};
 	parameter [15:0] WCLK_STOP_COUNT_DEFAULT = 16'd4096;
+	parameter [11:0] WCLK_POLARITY = 12'b010000000111;
 
 	wire update_wclk;
 	wire do_ramp_wclk;
@@ -75,13 +76,23 @@ module lab4d_wilkinson_ramp(
 	generate
 		genvar i;
 		for (i=0;i<12;i=i+1) begin : LOOP
-			ODDR #(.INIT(1'b0)) u_ff(.D1(wilk_out_wclk),
-											 .D2(1'b0),
-											 .CE(1'b1),
-											 .C(wclk_i),
-											 .Q(wilk_to_obuf[i]),
-											 .S(1'b0),.R(1'b0));
-			OBUFDS u_obuf(.I(wilk_to_obuf[i]),.O(WCLK_P[i]),.OB(WCLK_N[i]));
+			if (WCLK_POLARITY[i] == 0) begin : POS
+				ODDR #(.INIT(1'b0)) u_ff_p(.D1(wilk_out_wclk),
+												 .D2(1'b0),
+												 .CE(1'b1),
+												 .C(wclk_i),
+												 .Q(wilk_to_obuf[i]),
+												 .S(1'b0),.R(1'b0));
+				OBUFDS u_obuf_p(.I(wilk_to_obuf[i]),.O(WCLK_P[i]),.OB(WCLK_N[i]));
+			end else begin : NEG
+				ODDR #(.INIT(1'b1)) u_ff_n(.D1(~wilk_out_wclk),
+													.D2(1'b1),
+													.CE(1'b1),
+													.C(wclk_i),
+													.Q(wilk_to_obuf[i]),
+													.S(1'b0),.R(1'b0));
+				OBUFDS u_obuf_n(.I(wilk_to_obuf[i]),.O(WCLK_N[i]),.OB(WCLK_P[i]));
+			end
 			(* IOB = "TRUE" *)
 			FDRE u_rampfd(.D(ramp_out_wclk),.CE(1'b1),.C(wclk_i),.R(1'b0),.Q(RAMP[i]));
 		end
