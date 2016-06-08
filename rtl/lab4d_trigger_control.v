@@ -99,7 +99,7 @@ module lab4d_trigger_control(
 						  .C(sys_clk_i),
 						  .R(!enabled_sysclk),
 						  .Q(WR[5*i+3]));
-			for (j=0;j<2;j=j+1) begin : BIT
+			for (j=0;j<3;j=j+1) begin : BIT
 				(* IOB = "TRUE" *)
 				FDRE u_wr(.D(bank_plus_one[j]),
 							 .CE(enabled_sysclk),
