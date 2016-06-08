@@ -1,3 +1,69 @@
+CONSTANT	control_port, 00
+CONSTANT	test_0,	      04
+CONSTANT	test_1,	      05
+CONSTANT	user_0,	      08
+CONSTANT	user_1,	      09
+CONSTANT	user_2,	      0A
+CONSTANT	user_3,	      0B
+CONSTANT	serial_0,     10
+CONSTANT	serial_1,     11
+CONSTANT	serial_2,     12
+CONSTANT	serial_3,     13
+
+CONSTANT	runmode_request_bit,	02
+CONSTANT	runmode_bit,		04
+CONSTANT	user_serial_request_bit,	80
+CONSTANT	test_request_bit,		80
+CONSTANT	serial_busy_bit,		80
+CONSTANT	serial_GO,			40
+
 reset:
-	jump	reset
-	
+main:
+	; check runmode requests
+	input	s0,	control_port
+	test	s0,	runmode_request_bit
+	jump	NZ,	runmode_request
+	input	s0,	user_3
+	test	s0,	user_serial_request_bit
+	jump	NZ,	user_serial_request
+	input	s0,	test_1
+	test	s0,	test_request_bit
+	jump	NZ,	test_request	
+	jump 	main
+
+runmode_request:
+	; blah, fake crap
+	; just set running and wait for runmode_stop
+	load   s0, 	runmode_bit
+	output s0,	control_port
+runmode_loop:
+	; check trigger here
+	input	s0,	control_port
+	test	s0,	runmode_request_bit
+	jump	NZ,	runmode_loop
+	load	s0,	00
+	output	s0,	control_port
+	jump	main
+user_serial_request:
+	input	s8,	user_0
+	input	s9,	user_1
+	input	sA,	user_2
+	input	sB,	user_3
+	and	sB,	0F
+	output	s8,	serial_0
+	output	s9,	serial_1
+	output	sA,	serial_2
+	or	sB,	serial_GO
+	output	sB,	serial_3
+user_serial_request_lp1:
+	input	s0,	serial_3
+	test	s0,	serial_busy_bit
+	jump	Z,	user_serial_request_lp1
+	load	s0,	00
+	output	s0,	user_3
+	jump	main
+test_request:
+	; do test stuff
+	load 	s0,	00
+	output	s0,	test_1
+	jump	main
