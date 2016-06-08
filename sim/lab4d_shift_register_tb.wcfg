@@ -12,7 +12,7 @@
    </db_ref_list>
    <WVObjectSize size="13" />
    <wave_markers>
-      <marker time="17505100000" label="" />
+      <marker time="18135100000" label="" />
    </wave_markers>
    <wvobject fp_name="/lab4d_shift_register_tb/busy_o" type="logic" db_ref_id="1">
       <obj_property name="ElementShortName">busy_o</obj_property>
@@ -66,8 +66,8 @@
       <obj_property name="ObjectShortName">prescale_i[7:0]</obj_property>
    </wvobject>
    <wvobject fp_name="/lab4d_shift_register_tb/uut/state" type="array" db_ref_id="1">
-      <obj_property name="ElementShortName">state[2:0]</obj_property>
-      <obj_property name="ObjectShortName">state[2:0]</obj_property>
+      <obj_property name="ElementShortName">state[3:0]</obj_property>
+      <obj_property name="ObjectShortName">state[3:0]</obj_property>
       <obj_property name="Radix">HEXRADIX</obj_property>
    </wvobject>
 </wave_config>
