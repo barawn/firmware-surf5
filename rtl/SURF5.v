@@ -25,7 +25,11 @@ module SURF5(
 		inout [3:0]   LED,
 		
 		//MONITORING PINS
-		output [4:0]  MON,
+		input				MON0,
+		output			MON1,
+		input				MON2,
+		input				MON3,
+		input				MON4,
 
 		//PCI SIGNALS
 		// Directional.
@@ -109,15 +113,17 @@ module SURF5(
 		// SPI.
 		output			SPI_CS_neg,
 		output			SPI_D0_MOSI,
-		input 			SPI_D1_MISO
+		input 			SPI_D1_MISO,
+		output			SPI_D2,
+		output			SPI_D3
 	 );
    
 	localparam [3:0] BOARDREV = 4'h1;
 	localparam [3:0] MONTH = 6;
-	localparam [7:0] DAY = 1;
+	localparam [7:0] DAY = 7;
 	localparam [3:0] MAJOR = 0;
 	localparam [3:0] MINOR = 1;
-	localparam [7:0] REVISION = 0;
+	localparam [7:0] REVISION = 8;
 	localparam [31:0] VERSION = {BOARDREV, MONTH, DAY, MAJOR, MINOR, REVISION };
 	
 	wire [7:0] TD = {8{1'b0}};
@@ -127,13 +133,23 @@ module SURF5(
 			OBUFDS u_td_obuf(.I(TD[jj]),.OB(TD_N[jj]),.O(TD_P[jj]));
 		end
 	endgenerate
+	wire [11:0] MONTIMING;
+	wire [11:0] SRCLK = {12{1'b0}};
+	wire [11:0] DOE;
+	generate
+		genvar kk;
+		for (kk=0;kk<12;kk=kk+1) begin : DIFFLOOP
+			IBUFDS u_montiming(.I(MONTIMING_P[kk]),.IB(MONTIMING_N[kk]),.O(MONTIMING[kk]));
+		end
+	endgenerate
 
+	wire fpga_turf_sst_to_bufg;
 	wire FPGA_TURF_SST;
 	wire FPGA_SST;
-	IBUFDS u_turf_ibuf(.I(FPGA_TURF_SST_P),.IB(FPGA_TURF_SST_N),.O(FPGA_TURF_SST));
+	IBUFDS u_turf_ibuf(.I(FPGA_TURF_SST_P),.IB(FPGA_TURF_SST_N),.O(fpga_turf_sst_to_bufg));
+	BUFG u_fpga_turf_sst(.I(fpga_turf_sst_to_bufg),.O(FPGA_TURF_SST));
 	OBUFDS u_sst_obuf(.I(FPGA_SST),.O(FPGA_SST_P),.OB(FPGA_SST_N));
-	wire SCLK = 0;
-	OBUFDS u_sclk_obuf(.I(SCLK),.O(SCLK_P),.OB(SCLK_N));
+	OBUFDS u_sclk_obuf(.I(1'b0),.O(SCLK_P),.OB(SCLK_N));
 
 	wire PPS;
 	IBUFDS u_pps_ibuf(.I(PPS_P),.IB(PPS_N),.O(PPS));
@@ -146,6 +162,8 @@ module SURF5(
 	
 	// System clock debug.
 	wire [70:0] wbc_debug;
+	// LAB4 Controller debug
+	wire [70:0] lab4_debug;
 	// PCI clock debug.
 	wire [70:0] pci_debug;
 	
@@ -308,6 +326,8 @@ module SURF5(
 	assign pci_debug[60] = pci_debug_err;
 	assign pci_debug[61] = pci_debug_rty;	
 	
+	BUFG u_local_clk_bufg(.I(LOCAL_CLK),.O(local_clk_int));
+	
 	BUFGCTRL u_wbc_clk_mux(.I0(PCI_CLK),
 								  .I1(local_clk_int),
 								  .S0(!global_debug[0]),
@@ -317,8 +337,9 @@ module SURF5(
 								  .CE0(1'b1),
 								  .CE1(1'b1),
 								  .O(wbc_clk));
-	assign LOCAL_OSC_EN = global_debug[1]; //!(local_osc_en_int || global_debug[0]);
-
+	// LOCAL_OSC_EN is positive-high, and we want that bit to be a *disable*
+	assign LOCAL_OSC_EN = !global_debug[1] && !local_osc_en_int; 
+	
    // WISHBONE Control bus interconnect. This is the first stupid version, which does not handle registered WISHBONE transfers,
    // and is just a shared bus interconnect.
    wbc_intercon u_wbc_intercon(	.clk_i(wbc_clk),.rst_i(wbc_rst),
@@ -356,7 +377,8 @@ module SURF5(
 											 .WCLK_P(WCLK_P),
 											 .WCLK_N(WCLK_N),
 											 .SHOUT(SHOUT),
-											 .WR(WR));
+											 .WR(WR),
+											 .debug_o(lab4_debug));
 										 
 	// LAB4 RAM and serial receiver.
 	// The serial receiver just streams out 128x12 bits and writes them into
@@ -395,8 +417,6 @@ module SURF5(
 				 .sys_clk_o(sys_clk),
 				 .sys_clk_div4_flag_o(sys_clk_div4_flag),
 				 .wclk_o(wclk),
-				 // Local clock output (25 MHz).
-				 .local_clk_o(local_clk_int),
 				 // PPS generation, in both domains.
 				 // Note that this may be a fake internal PPS
 				 // if no external PPS has been detected.
@@ -417,7 +437,7 @@ module SURF5(
 				 .LED(LED),
 				 .FP_LED(FP_LED),
 				 // Clock ports.
-				 .LOCAL_CLK(LOCAL_CLK),
+				 .LOCAL_CLK(local_clk_int),
 				 .LOCAL_OSC_EN(local_osc_en_int),
 				 .FPGA_SST_SEL(FPGA_SST_SEL),
 				 .FPGA_SST(FPGA_SST),
@@ -427,12 +447,17 @@ module SURF5(
 							  .clk0_i(wbc_clk),
 							  .clk1_i(sys_clk),
 							  `WBM_CONNECT(wbvio, wbvio),
-							  .wbc_debug_i(pci_debug),
-							  .ice_debug_i(lab4_debug),
-							  .i2c_debug_i(i2c_debug),
-							  .lab4_i2c_debug_i(lab4_i2c_debug),
-							  .rfp_debug_i(rfp_debug),
+							  .clk0_debug0_i(pci_debug),
+							  .clk0_debug1_i(lab4_debug),
+							  .clk0_debug2_i(i2c_debug),			// unused
+							  .clk0_debug3_i(lab4_i2c_debug),	// unused
+							  .clk1_debug_i(rfp_debug),			// unused
 							  .global_debug_o(global_debug));
 
 	assign SREQ_neg = 1;
+	assign SPI_D2 = 1;
+	assign SPI_D3 = 1;
+	
+	ODDR local_clk_ddr(.D1(1'b0),.D2(1'b1),.C(local_clk_int),.CE(1'b1),.S(1'b0),.R(1'b0),.Q(MON1));
+	
 endmodule

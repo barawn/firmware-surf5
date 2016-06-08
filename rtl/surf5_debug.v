@@ -16,14 +16,20 @@ module surf5_debug(
 		input clk0_i,
 		input clk1_i,
 		`WBM_NAMED_PORT(wbvio, 32, 20, 4),
-		input [70:0] wbc_debug_i,
-		input [70:0] ice_debug_i,
-		input [70:0] lab4_i2c_debug_i,
-		input [23:0] i2c_debug_i,
-		input [70:0] rfp_debug_i,
+		input [70:0] clk0_debug0_i,
+		input [70:0] clk0_debug1_i,
+		input [70:0] clk0_debug2_i,
+		input [70:0] clk0_debug3_i,
+		input [70:0] clk1_debug_i,
 		output [7:0] global_debug_o
     );
 
+	wire [70:0] ila0_debug_vec[3:0];
+	assign ila0_debug_vec[0] = clk0_debug0_i;
+	assign ila0_debug_vec[1] = clk0_debug1_i;
+	assign ila0_debug_vec[2] = clk0_debug2_i;
+	assign ila0_debug_vec[3] = clk0_debug3_i;
+	
 	reg [70:0] ila0_debug = {71{1'b0}};
 	reg [70:0] ila1_debug = {71{1'b0}};
 	wire [63:0] vio_sync_in;
@@ -65,18 +71,10 @@ module surf5_debug(
 								 .rty_i(wbvio_rty_i)
 								 );
 	always @(posedge clk0_i) begin
-		if (ila0_sel[1:0] == 2'b01) ila0_debug <= rfp_debug_i;
-		else if (ila0_sel[1:0] == 2'b11) begin
-			ila0_debug[50:0] <= lab4_i2c_debug_i[50:0];
-			ila0_debug[51] <= i2c_debug_i[0];
-			ila0_debug[52] <= i2c_debug_i[12];
-			ila0_debug[53] <= i2c_debug_i[1];
-			ila0_debug[54] <= i2c_debug_i[13];
-		end
-		else ila0_debug <= wbc_debug_i;
+		ila0_debug <= ila0_debug_vec[ila0_sel[1:0]];
 	end
 	always @(posedge clk1_i) begin
-		ila1_debug <= ice_debug_i;
+		ila1_debug <= clk1_debug_i;
 	end
 	wire [35:0] vio_control;
 	wire [35:0] ila0_control;
