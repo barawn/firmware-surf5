@@ -17,6 +17,7 @@ module lab4d_controller(
 		`WBS_NAMED_PORT(wb, 32, 16, 4),
 		input sys_clk_i,
 		input sys_clk_div4_flag_i,
+		input sync_i,
 		input wclk_i,
 		input trig_i,
 		
@@ -34,7 +35,8 @@ module lab4d_controller(
 		output [11:0] WCLK_N,
 		input [11:0] SHOUT,
 		output [59:0] WR,
-		output [70:0] debug_o
+		output [70:0] debug_o,
+		output [15:0] trigger_debug_o
     );
 	
 	localparam [3:0] READOUT_PRESCALE_DEFAULT = 4'h0;
@@ -95,7 +97,7 @@ module lab4d_controller(
 	reg [15:0] wclk_stop_count = WCLK_STOP_COUNT_DEFAULT;
 	wire [31:0] wclk_stop_count_register = {{16{1'b0}},wclk_stop_count};
 	
-	reg do_ramp = 0;
+	wire do_ramp;
 	reg ramp_pending = 0;
 	wire ramp_done;
 	
@@ -118,17 +120,23 @@ module lab4d_controller(
 	reg test_pattern_request = 0;
 	wire [31:0] test_pattern_register = {test_pattern_request,{15{1'b0}},{4{1'b0}},test_pattern_data};
 
-	// this trigger stuff sucks, we need to fix it
-	wire trigger_busy;
+	// still sucks, not as much
+	wire trigger_empty;
+	wire trigger_start;
+	wire trigger_stop;
 	wire [5:0] trigger_address;
 	reg trigger_clear = 0;
 	reg force_trigger = 0;
-	wire [31:0] trigger_register = {{25{1'b0}},trigger_busy,trigger_address};
-	
+	reg [2:0] post_trigger = {3{1'b0}};
+	reg post_trigger_wr = 0;
+	reg trigger_reset = 0;
+	wire [31:0] trigger_register = {{13{1'b0}},post_trigger,{8{1'b0}},trigger_empty,1'b0,trigger_address};
+
 	reg readout_pending = 0;
 	reg readout_done = 0;
-	wire [31:0] readout_register = {{29{1'b0}},readout_done,readout_pending};
-
+	reg readout_data_not_test_pattern = 0;
+	wire [31:0] readout_register = {{24{1'b0}},readout_pending,{2{1'b0}},readout_data_not_test_pattern,{3{1'b0}},readout_done};
+	
 	//% Holds PicoBlaze in reset.
 	reg processor_reset = 0;
 	//% Enables writes to BRAM.
@@ -201,7 +209,7 @@ module lab4d_controller(
 	assign pb_inport[19] = {lab4_serial_busy,3'b000,lab4_serial_select};
 	assign pb_inport[20] = trigger_register[7:0];
 	assign pb_inport[21] = {8{1'b0}};
-	assign pb_inport[22] = {readout_pending,{7{1'b0}}};
+	assign pb_inport[22] = readout_register[7:0];
 	assign pb_inport[23] = {ramp_pending,{7{1'b0}}};
 	assign pb_inport[24] = pb_inport[16];
 	assign pb_inport[25] = pb_inport[17];
@@ -213,13 +221,27 @@ module lab4d_controller(
 	assign pb_inport[31] = pb_inport[23];
 	
 	assign lab4_serial_go = (pb_port[4:0] == 19) && pb_write && pb_outport[6];
+	assign do_ramp = (pb_port[4:0] == 23) && pb_write && pb_outport[6];
+	wire do_readout;
+	wire readout_complete;
+	assign do_readout = (pb_port[4:0] == 22) && pb_write && pb_outport[6];
+	flag_sync u_readout_flag(.in_clkA(do_readout),.clkA(clk_i),.out_clkB(readout_o),.clkB(sys_clk_i));
+	flag_sync u_complete_flag(.in_clkA(complete_i),.clkA(sys_clk_i),.out_clkB(readout_complete),.clkB(clk_i));
+
+	assign trigger_start = (pb_port[4:0] == 20) && pb_write && pb_outport[0];
+	assign trigger_stop = (pb_port[4:0] == 20) && pb_write && pb_outport[1];
+	assign trigger_read = (pb_port[4:0] == 20) && pb_write && pb_outport[6];
 	
 	always @(posedge clk_i) begin
 		if (ramp_done) ramp_pending <= 0;
 		else if (do_ramp) ramp_pending <= 1;
 	
-		if (complete_i) readout_pending <= 0;
-		else if (readout_o) readout_pending <= 1;
+		if (readout_complete) readout_pending <= 0;
+		else if (do_readout) readout_pending <= 1;
+
+		if (pb_port[4:0] == 22 && pb_write) readout_done <= pb_outport[0];
+		
+		if (wb_cyc_i && wb_stb_i && wb_we_i && wb_adr_i[6:0] == 7'h58) readout_data_not_test_pattern <= wb_dat_i[4];
 				
 		if (pb_port[4:0] == 19 && pb_write) begin
 			lab4_serial_select <= pb_outport[3:0];
@@ -271,7 +293,17 @@ module lab4d_controller(
 		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:0] == 7'h54)) begin
 			trigger_clear <= wb_dat_i[0];
 			force_trigger <= wb_dat_i[1];
-		end		
+			trigger_reset <= wb_dat_i[2];
+			if (wb_dat_i[31]) begin 
+				post_trigger_wr <= 1;
+				post_trigger <= wb_dat_i[18:16];
+			end
+		end else begin
+			trigger_clear <= 0;
+			force_trigger <= 0;
+			trigger_reset <= 0;
+			post_trigger_wr <= 0;
+		end
 
 		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:0] == 7'h7C)) begin
 			processor_reset <= wb_dat_i[31];
@@ -302,14 +334,26 @@ module lab4d_controller(
 	lab4d_trigger_control u_trigger(.clk_i(clk_i),
 											  .sys_clk_i(sys_clk_i),
 											  .sys_clk_div4_flag_i(sys_clk_div4_flag_i),
-											  .enable_i(lab4_runmode),
+											  .sync_i(sync_i),
+											  .start_i(trigger_start),
+											  .stop_i(trigger_stop),											  
 											  .ready_o(lab4_running),
 											  .trigger_i(trig_i),
 											  .force_trigger_i(force_trigger),
-											  .trigger_busy_o(trigger_busy),
+											  
+											  .rst_i(trigger_reset),
+											  .post_trigger_i(post_trigger),
+											  .post_trigger_wr_i(post_trigger_wr),
+											  											  
+											  .trigger_empty_o(trigger_empty),
+											  .trigger_rd_i(trigger_read),
 											  .trigger_address_o(trigger_address),
 											  .trigger_clear_i(trigger_clear),
+											  
+											  .trigger_debug_o(trigger_debug_o),
+											  
 											  .WR(WR));
+	wire dbg_ramp;
 	lab4d_wilkinson_ramp u_ramp(.clk_i(clk_i),
 										 .wclk_i(wclk_i),
 										 .update_i(update_wilkinson),
@@ -317,6 +361,7 @@ module lab4d_controller(
 										 .wclk_stop_count_i(wclk_stop_count),
 										 .do_ramp_i(do_ramp),
 										 .ramp_done_o(ramp_done),
+										 .dbg_ramp_o(dbg_ramp),
 										 .RAMP(RAMP),
 										 .WCLK_P(WCLK_P),
 										 .WCLK_N(WCLK_N));
@@ -382,7 +427,7 @@ module lab4d_controller(
 	assign debug_o[45] = processor_reset;
 	assign debug_o[46] = bram_we_enable;
 	assign debug_o[47 +: 8] = pb_port;
-	
+	assign debug_o[55] = dbg_ramp;
         assign wb_ack_o = ack;
         assign wb_err_o = 1'b0;
         assign wb_rty_o = 0;

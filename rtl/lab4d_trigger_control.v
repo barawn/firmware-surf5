@@ -14,103 +14,151 @@ module lab4d_trigger_control(
 		input clk_i,
 		input sys_clk_i,
 		input sys_clk_div4_flag_i,
-		input enable_i,
+		input sync_i,
+		input start_i,
+		input stop_i,
 		output ready_o,
+		// Configuration interface
+		input rst_i,
+		input [2:0] post_trigger_i,
+		input post_trigger_wr_i,
+		
+		// Triggering interface
 		input trigger_i,
 		input force_trigger_i,
-		output trigger_busy_o,
+
+		// Trigger FIFO read interface
+		output trigger_empty_o,
+		input trigger_rd_i,
 		output [5:0] trigger_address_o,
 		input trigger_clear_i,
+		
+		output [15:0] trigger_debug_o,
 		output [59:0] WR
     );
 
-	reg [1:0] buffer_wr_ptr = {2{1'b0}};
-	wire [1:0] next_buffer_wr_ptr = buffer_wr_ptr + 1;
-	reg [1:0] buffer_rd_ptr = {2{1'b0}};
-	wire enable_next_buffer;
-	reg [2:0] bank = {3{1'b0}};
-	wire [3:0] bank_plus_one = bank + 1;
-	reg [2:0] buffer_bank[3:0];
+	reg [1:0] bank = {2{1'b0}};
+	wire [2:0] bank_plus_one = bank + 1;
+	wire enable_next_bank;
 	
-	wire enable_sysclk;
-	wire force_trigger_sysclk;	
+	reg [1:0] bank_full_counter = {2{1'b0}};
+	
+	reg [2:0] window = {3{1'b0}};
+	wire [3:0] window_plus_one = window + 1;
+	wire enable_next_window;
+	
+	reg [2:0] post_trigger_counter = {3{1'b0}};
+	reg [2:0] post_trigger_limit = {3{1'b0}};
+	
+	reg [5:0] trigger_address = {6{1'b0}};	
+	reg triggering = 0;
+	reg trigger_write = 0;
+	
+	reg start_seen = 0;
+	wire start_sysclk;
+	reg stop_seen = 0;
+	wire stop_sysclk;
+
 	reg enabled_sysclk = 0;
+
+	wire force_trigger_sysclk;	
 	wire trigger_clear_sysclk;
-	reg [1:0] trigger_is_busy_sysclk = 0;
-	reg trigger_flag_sysclk = 0;
-	wire trigger_flag_clk;
-	reg trigger_ready_clk = 0;
-	reg [5:0] trigger_address_clk = {6{1'b0}};
+	wire post_trigger_wr_sysclk;
 	
-	signal_sync u_enable_sync(.in_clkA(enable_i),.clkA(clk_i),.out_clkB(enable_sysclk),.clkB(sys_clk_i));
-	signal_sync u_enabled_sync(.in_clkA(enabled_sysclk),.clkA(sys_clk_i),.out_clkB(ready_o),.clkB(clk_i));
+	flag_sync u_start_sync(.in_clkA(start_i),.clkA(clk_i),.out_clkB(start_sysclk),.clkB(sys_clk_i));
+	flag_sync u_stop_sync(.in_clkA(stop_i),.clkA(clk_i),.out_clkB(stop_sysclk),.clkB(sys_clk_i));
 	flag_sync u_force_sync(.in_clkA(force_trigger_i),.clkA(clk_i),.out_clkB(force_trigger_sysclk),.clkB(sys_clk_i));
 	flag_sync u_clear_sync(.in_clkA(trigger_clear_i),.clkA(clk_i),.out_clkB(trigger_clear_sysclk),.clkB(sys_clk_i));
-	flag_sync u_trigger_flag_sync(.in_clkA(trigger_flag_sysclk),.clkA(sys_clk_i),.out_clkB(trigger_flag_clk),.clkB(clk_i));
+	signal_sync u_enabled_sync(.in_clkA(enabled_sysclk),.clkA(sys_clk_i),.out_clkB(ready_o),.clkB(clk_i));
 	
-	initial begin
-		buffer_bank[0] <= {3{1'b0}};
-		buffer_bank[1] <= {3{1'b0}};
-		buffer_bank[2] <= {3{1'b0}};
-		buffer_bank[3] <= {3{1'b0}};
-	end
-	assign enable_next_buffer = (trigger_i || force_trigger_sysclk) && !(next_buffer_wr_ptr == buffer_rd_ptr);
+	flag_sync u_post_trigger_sync(.in_clkA(post_trigger_wr_i),.clkA(clk_i),.out_clkB(post_trigger_wr_sysclk),.clkB(sys_clk_i));
+	
 	always @(posedge sys_clk_i) begin
-		enabled_sysclk <= enable_sysclk;
+		if (start_sysclk) start_seen <= 1;
+		else if (enabled_sysclk) start_seen <= 0;
+		
+		if (stop_sysclk) stop_seen <= 1;
+		else if (!enabled_sysclk) stop_seen <= 0;
+		
+		// Start up only when we're exiting sync=1. We then start with write address 0.
+		// End at a boundary.
+		if (start_seen && sys_clk_div4_flag_i && sync_i) enabled_sysclk <= 1;
+		else if (stop_seen && sys_clk_div4_flag_i) enabled_sysclk <= 0;
 
+		// Move forward a window at each sys_clk_div4_flag. Reset if not enabled.
 		if (enabled_sysclk) begin
-			if (sys_clk_div4_flag_i) bank <= bank_plus_one[2:0];
+			if (sys_clk_div4_flag_i) window <= window + 1;
 		end
-			else bank <= {3{1'b0}};
+			else window <= {3{1'b0}};
 		
-		if (enable_next_buffer) begin
-			buffer_bank[buffer_wr_ptr] <= bank;
-			buffer_wr_ptr <= buffer_wr_ptr + 1;
-		end else if (!enabled_sysclk) begin
-			buffer_wr_ptr <= 2'b00;
-		end
-		if (trigger_clear_sysclk && (buffer_rd_ptr != buffer_wr_ptr)) begin
-			buffer_rd_ptr <= buffer_rd_ptr + 1;
-		end else if (!enabled_sysclk) begin
-			buffer_rd_ptr <= 2'b00;
-		end
-		
-		trigger_is_busy_sysclk <= {trigger_is_busy_sysclk[0],(buffer_rd_ptr != buffer_wr_ptr) && !trigger_clear_sysclk};
-		trigger_flag_sysclk <= {trigger_is_busy_sysclk[0] && !trigger_is_busy_sysclk[1]};
-	end
-	always @(posedge clk_i) begin
-		if (trigger_flag_clk) trigger_address_clk <= {buffer_rd_ptr,buffer_bank[buffer_rd_ptr]};
+		// If we get a trigger, set to triggering state. Once we hit the post-trigger limit, exit that state.
+		if (trigger_i || force_trigger_sysclk) triggering <= 1;
+		else if (post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i) triggering <= 0;
 
-		if (trigger_clear_i || !enable_i) trigger_ready_clk <= 0;
-		else if (trigger_flag_clk) trigger_ready_clk <= 1;
+		// Capture the trigger address when a trigger happens.
+		if (trigger_i || force_trigger_sysclk) trigger_address <= {bank, window};
+
+		// Move to next buffer when we hit post trigger limit.
+		if (triggering && post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i) bank <= bank + 1;
+		else if (rst_i) bank <= {2{1'b0}};
+		
+		// Write the trigger into the FIFO when we hit the post trigger limit.
+		if (triggering && post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i) trigger_write <= 1;
+		else trigger_write <= 0;
+
+		// Count the post trigger counter when triggering.
+		if (triggering && sys_clk_div4_flag_i) post_trigger_counter <= post_trigger_counter + 1;
+		else if (!triggering) post_trigger_counter <= {3{1'b0}};
+
+		// Grab the limit from the control interface.
+		if (post_trigger_wr_sysclk) post_trigger_limit <= post_trigger_i;		
+
+		// DO SOMETHING SMART HERE TO DISABLE TRIGGERS!!
+		if (trigger_write) bank_full_counter <= bank_full_counter + 1;
+		else if (trigger_clear_sysclk) bank_full_counter <= bank_full_counter - 1;
+
 	end
+
+	trigger_fifo u_fifo(.din(trigger_address),.dout(trigger_address_o),.rd_clk(clk_i),.wr_clk(sys_clk_i),
+							  .wr_en(trigger_write),.rd_en(trigger_rd_i),.empty(trigger_empty_o),
+							  .rst(rst_i));
+
+	assign enable_next_bank = (triggering && post_trigger_counter == post_trigger_limit);
+	assign enable_next_window = (sys_clk_div4_flag_i);
 	
 	generate
 		genvar i,j;
 		for (i=0;i<12;i=i+1) begin : LAB
 			(* IOB = "TRUE" *)
-			FDRE u_wr4(.D(next_buffer_wr_ptr[1]),
-						  .CE(enable_next_buffer),
+			FDRE u_wr4(.D(bank_plus_one[0]),
+						  .CE(enable_next_bank),
 						  .C(sys_clk_i),
 						  .R(!enabled_sysclk),
 						  .Q(WR[5*i+4]));
-			FDRE u_wr3(.D(next_buffer_wr_ptr[0]),
-						  .CE(enable_next_buffer),
+			FDRE u_wr3(.D(bank_plus_one[1]),
+						  .CE(enable_next_bank),
 						  .C(sys_clk_i),
 						  .R(!enabled_sysclk),
 						  .Q(WR[5*i+3]));
 			for (j=0;j<3;j=j+1) begin : BIT
 				(* IOB = "TRUE" *)
-				FDRE u_wr(.D(bank_plus_one[j]),
-							 .CE(enabled_sysclk),
+				FDRE u_wr(.D(window_plus_one[j]),
+							 .CE(enable_next_window),
 							 .C(sys_clk_i),
 							 .R(!enabled_sysclk),
 							 .Q(WR[5*i+j]));
 			end
 		end
 	endgenerate
+	assign trigger_debug_o[5:0] = {bank,window};
+	assign trigger_debug_o[6] = trigger_i;
+	assign trigger_debug_o[7] = force_trigger_sysclk;
+	assign trigger_debug_o[8] = trigger_write;
+	assign trigger_debug_o[9] = triggering;
+	assign trigger_debug_o[10] = rst_i;
+	assign trigger_debug_o[11] = enabled_sysclk;
+	assign trigger_debug_o[12] = start_sysclk;
+	assign trigger_debug_o[13] = stop_sysclk;
+	assign trigger_debug_o[15:14] = {2{1'b0}};
 
-	assign trigger_address_o = trigger_address_clk;
-	assign trigger_busy_o = trigger_ready_clk;
-	
 endmodule
