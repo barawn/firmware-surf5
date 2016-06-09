@@ -62,7 +62,9 @@ module surf5_id_ctrl(
 		output sys_clk_o,
 		output sys_clk_div4_flag_o,
 		output sys_clk_div4_o,
-		
+		output sync_o,
+		input  sync_reset_i,
+
 		output wclk_o,
 		
 		// PPS.
@@ -108,6 +110,8 @@ module surf5_id_ctrl(
 		reg toggle_edge_detect_in_sysclk = 0;
 		reg delay_edge_detect = 0;
 		reg sys_clk_div4_flag = 0;
+		reg sync_reg = 0;
+		reg sync_reset_req = 0;
 		
 		wire [31:0] pll_drp_dat_o; 
 		wire pll_drp_select = (wb_adr_i[9]);
@@ -382,8 +386,18 @@ module surf5_id_ctrl(
 			toggle_edge_detect_in_sysclk <= (toggle_sysclk_div4_in_sysclk == 2'b10 || toggle_sysclk_div4_in_sysclk == 2'b01);
 			delay_edge_detect <= toggle_edge_detect_in_sysclk;
 			sys_clk_div4_flag <= delay_edge_detect;
+			
+			if (sys_clk_div4_flag) begin
+				if (sync_reset_req) sync_reg <= 0;
+				else sync_reg <= ~sync_reg;
+			end
+			if (sync_reset_i) sync_reset_req <= 1;
+			else if (sys_clk_div4_flag) sync_reset_req <= 0;
 		end
 		assign sys_clk_div4_flag_o = sys_clk_div4_flag;
+		
+		// make this disable-able
+		ODDR u_sst(.D1(1'b0),.D2(1'b1),.C(sys_clk_div4_mmcm), .CE(1'b1), .S(1'b0),.R(1'b0),.Q(FPGA_SST));
 		
 		// To Do:
 		// -- PPS generation/selection/control.
@@ -392,4 +406,5 @@ module surf5_id_ctrl(
 		assign pps_sysclk_o = 0;
 		assign ext_trig_o = 0;
 		assign ext_trig_sysclk_o = 0;
+		assign sync_o = sync_reg;
 endmodule
