@@ -27,7 +27,7 @@ module SURF5(
 		//MONITORING PINS
 		input				MON0,
 		output			MON1,
-		input				MON2,
+		output			MON2,
 		input				MON3,
 		input				MON4,
 
@@ -109,7 +109,9 @@ module SURF5(
 		// microcontroller.
 		inout 	      UC_SCL, 
 		inout 	      UC_SDA,
-		
+		// RFP I2C bus
+		inout				RFP_DAC_SCL,
+		inout				RFP_DAC_SDA,
 		// SPI.
 		output			SPI_CS_neg,
 		output			SPI_D0_MOSI,
@@ -120,10 +122,10 @@ module SURF5(
    
 	localparam [3:0] BOARDREV = 4'h1;
 	localparam [3:0] MONTH = 6;
-	localparam [7:0] DAY = 7;
+	localparam [7:0] DAY = 9;
 	localparam [3:0] MAJOR = 0;
 	localparam [3:0] MINOR = 1;
-	localparam [7:0] REVISION = 8;
+	localparam [7:0] REVISION = 19;
 	localparam [31:0] VERSION = {BOARDREV, MONTH, DAY, MAJOR, MINOR, REVISION };
 	
 	wire [7:0] TD = {8{1'b0}};
@@ -133,13 +135,20 @@ module SURF5(
 			OBUFDS u_td_obuf(.I(TD[jj]),.OB(TD_N[jj]),.O(TD_P[jj]));
 		end
 	endgenerate
+	reg [11:0] montiming_reg = {12{1'b0}};
+	localparam [11:0] MONTIMING_POLARITY = 12'b100000000000;
 	wire [11:0] MONTIMING;
+	wire [11:0] MONTIMING_B;
 	wire [11:0] SRCLK = {12{1'b0}};
 	wire [11:0] DOE;
 	generate
 		genvar kk;
 		for (kk=0;kk<12;kk=kk+1) begin : DIFFLOOP
-			IBUFDS u_montiming(.I(MONTIMING_P[kk]),.IB(MONTIMING_N[kk]),.O(MONTIMING[kk]));
+			if (MONTIMING_POLARITY[kk] == 0) begin : POS
+				IBUFDS_DIFF_OUT u_montiming(.I(MONTIMING_P[kk]),.IB(MONTIMING_N[kk]),.O(MONTIMING[kk]),.OB(MONTIMING_B[kk]));
+			end else begin : NEG
+				IBUFDS_DIFF_OUT u_montiming_b(.I(MONTIMING_N[kk]),.IB(MONTIMING_P[kk]),.O(MONTIMING_B[kk]),.OB(MONTIMING[kk]));
+			end
 		end
 	endgenerate
 
@@ -197,6 +206,10 @@ module SURF5(
    wire 	    sys_clk;
 	//% First clock of the 4 in an SST period.
 	wire		 sys_clk_div4_flag;
+	//% Overall phase (equiv. to PHAB in a LAB).
+	wire 		 sync;
+	//% Sync reset, coming from TURF.
+	wire 		 sync_reset;
 	//% Wilkinson clock (200 MHz).
 	wire		 wclk;
 	//% Local clock (25 MHz).
@@ -230,13 +243,10 @@ module SURF5(
 	`WB_DEFINE( l4_ctrl, 32, 16, 4);
 	// LAB4 RAM. Screw dense packing, waste the upper 4 bits. Make it 8x2x16-bitsx4k, which is 1 megabit.
 	// On a 32-bit bus, this is 32K addresses. So 0x20000-0x2FFFF.
-	`WB_DEFINE( l4_ram, 32, 19, 4);
+	`WB_DEFINE( l4_ram, 32, 16, 4);
 	// Dummy slave 3.
-	`WB_DEFINE( rfp, 32, 19, 4);
-	
-	// Kill the dummy busses.
-	`WBM_KILL( rfp, 32 );
-  
+	`WB_DEFINE( rfp, 32, 16, 4);
+	  
 	// WISHBONE data bus. These aren't merged anywhere yet. Still figuring out best methods.
 	// pcid: PCI data slave port WISHBONE bus.
 	`WB_DEFINE( pcid, 32, 32, 4);
@@ -359,10 +369,12 @@ module SURF5(
 	wire [4:0] readout_address_sysclk;
 	wire [3:0] readout_prescale_sysclk;
 	wire readout_complete_sysclk;
+	wire [15:0] trigger_debug;
 	lab4d_controller u_controller( .clk_i(wbc_clk),.rst_i(wbc_rst),
 											 `WBS_CONNECT(l4_ctrl, wb),
 											 .sys_clk_i(sys_clk),
 											 .sys_clk_div4_flag_i(sys_clk_div4_flag),
+											 .sync_i(sync),
 											 .wclk_i(wclk),
 											 .trig_i(trigger_in),
 											 .readout_o(readout_begin_sysclk),
@@ -378,22 +390,30 @@ module SURF5(
 											 .WCLK_N(WCLK_N),
 											 .SHOUT(SHOUT),
 											 .WR(WR),
-											 .debug_o(lab4_debug));
+											 .debug_o(lab4_debug),
+											 .trigger_debug_o(trigger_debug));
 										 
 	// LAB4 RAM and serial receiver.
 	// The serial receiver just streams out 128x12 bits and writes them into
 	// block RAM connected to the WISHBONE bus.
+	wire [23:0] readout_debug;
 	lab4d_ram u_ram( .clk_i(wbc_clk), .rst_i(wbc_rst),
 						  `WBS_CONNECT(l4_ram, wb),
 						  .sys_clk_i(sys_clk),
 						  .readout_i(readout_begin_sysclk),
 						  .prescale_i(readout_prescale_sysclk),
 						  .complete_o(readout_complete_sysclk),
+						  .readout_debug_o(readout_debug),
 						  .DOE_LVDS_P(DOE_LVDS_P),
 						  .DOE_LVDS_N(DOE_LVDS_N),
 						  .SS_INCR(SS_INCR),
 						  .SRCLK_P(SRCLK_P),
 						  .SRCLK_N(SRCLK_N));
+
+	rfp_top u_rfp(.clk_i(wbc_clk),.rst_i(wbc_rst),
+					  `WBS_CONNECT(rfp, wb),
+					  .RFP_SDA(RFP_DAC_SDA),
+					  .RFP_SCL(RFP_DAC_SCL));
 						 											    
    // TURFbus. This is the data path back to the TURF.
    // This also needs a slave port definition for the data side bus.
@@ -416,6 +436,8 @@ module SURF5(
 				 // System clock output.
 				 .sys_clk_o(sys_clk),
 				 .sys_clk_div4_flag_o(sys_clk_div4_flag),
+				 .sync_o(sync),
+				 .sync_reset_i(sync_reset),
 				 .wclk_o(wclk),
 				 // PPS generation, in both domains.
 				 // Note that this may be a fake internal PPS
@@ -443,21 +465,41 @@ module SURF5(
 				 .FPGA_SST(FPGA_SST),
 				 .FPGA_TURF_SST(FPGA_TURF_SST));
 
+	wire [70:0] sysclk_debug;
+	always @(posedge sys_clk) begin
+		montiming_reg <= MONTIMING;
+	end
+	assign sysclk_debug[0 +: 12] = montiming_reg;
+	assign sysclk_debug[12] = sys_clk_div4_flag;
+	assign sysclk_debug[13] = sync;
+	assign sysclk_debug[16 +: 16] = trigger_debug;
+	assign sysclk_debug[32 +: 24] = readout_debug;
+	
 	surf5_debug u_debug(.wbc_clk_i(wbc_clk),
 							  .clk0_i(wbc_clk),
 							  .clk1_i(sys_clk),
 							  `WBM_CONNECT(wbvio, wbvio),
 							  .clk0_debug0_i(pci_debug),
 							  .clk0_debug1_i(lab4_debug),
-							  .clk0_debug2_i(i2c_debug),			// unused
+							  .clk0_debug2_i(wbc_debug),			// unused
 							  .clk0_debug3_i(lab4_i2c_debug),	// unused
-							  .clk1_debug_i(rfp_debug),			// unused
+							  .clk1_debug_i(sysclk_debug),		// unused
 							  .global_debug_o(global_debug));
 
 	assign SREQ_neg = 1;
 	assign SPI_D2 = 1;
 	assign SPI_D3 = 1;
+
+	reg [1:0] div4_delay = {2{1'b0}};
+	reg internal_sst_copy = 0;
+	
+	always @(posedge sys_clk) begin
+		div4_delay <= {div4_delay[0],sys_clk_div4_flag};
+		if (sys_clk_div4_flag) internal_sst_copy <= 1;
+		else if (div4_delay[1]) internal_sst_copy <= 0;
+	end
 	
 	ODDR local_clk_ddr(.D1(1'b0),.D2(1'b1),.C(local_clk_int),.CE(1'b1),.S(1'b0),.R(1'b0),.Q(MON1));
+	assign MON2 = internal_sst_copy;
 	
 endmodule
