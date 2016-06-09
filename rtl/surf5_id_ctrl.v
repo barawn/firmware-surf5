@@ -160,7 +160,7 @@ module surf5_id_ctrl(
 		endfunction
 		`define OUTPUT(addr, x, range, dummy)																				\
 					assign wishbone_registers[ addr ] range = x
-		`define SELECT(addr, x, dummy, dummy)																			\
+		`define SELECT(addr, x, dummy, dummy1)																			\
 					wire x;																											\
 					localparam [BASEWIDTH-1:0] addr_``x = addr;															\
 					assign x = (wb_cyc_i && wb_stb_i && wb_we_i && wb_ack_o && (BASE(wb_adr_i) == addr_``x))
@@ -191,6 +191,7 @@ module surf5_id_ctrl(
 		`WISHBONE_ADDRESS( 16'h001C, clocksel_reg, SIGNALRESET, [31:0], {32{1'b0}});
 		`WISHBONE_ADDRESS( 16'h0020, pllctrl_reg, OUTPUTSELECT, sel_pllctrl_reg, 0);
 		`WISHBONE_ADDRESS( 16'h0024, spiss_reg, SIGNALRESET, [31:0], {32{1'b0}});
+		`WISHBONE_ADDRESS( 16'h0028, phase_select_sel, SELECT, 0, 0);
 		`WISHBONE_ADDRESS( 16'h0028, {32{1'b0}}, OUTPUT, [31:0], 0);
 		`WISHBONE_ADDRESS( 16'h002C, {32{1'b0}}, OUTPUT, [31:0], 0);
 		// Shadow registers - never accessed (the SPI core takes over). Just here to make decoding easier.
@@ -359,6 +360,28 @@ module surf5_id_ctrl(
 		BUFG u_sysclk_div4(.I(sys_clk_div4_mmcm),.O(sys_clk_div4_o));
 		BUFG u_wclk(.I(wclk_mmcm),.O(wclk_o));
 		
+		reg [1:0] phase_select = {2{1'b0}};
+		reg phase_select_flag = 0;
+		wire phase_select_flag_sysclk;
+		reg [1:0] phase_select_sysclk = {2{1'b0}};
+
+		reg [3:0] div4_flag_quadrature = {4{1'b0}};		
+		wire div4_flag = div4_flag_quadrature[phase_select_sysclk];
+
+		always @(posedge clk_i) begin
+			if (phase_select_sel) begin
+				phase_select <= wb_dat_i[1:0];
+				phase_select_flag <= 1;
+			end else begin
+				phase_select_flag <= 0;
+			end
+		end
+		flag_sync u_phase_wr_sync(.in_clkA(phase_select_flag),.clkA(clk_i),.out_clkB(sys_clk_i),.clkB(phase_select_flag_sysclk));
+		always @(posedge sys_clk_i) begin
+			if (phase_select_flag_sysclk)
+				phase_select_sysclk <= phase_select;
+		end
+					
 		// OK, so this is complicated. First, we generate a toggle flop in the 25 MHz domain.
 		// Just gives us a register to re-register in the 100 MHz domain. Doesn't matter its phase,
 		// we're just looking for edges.
@@ -385,8 +408,9 @@ module surf5_id_ctrl(
 			// skew causing a problem.
 			toggle_edge_detect_in_sysclk <= (toggle_sysclk_div4_in_sysclk == 2'b10 || toggle_sysclk_div4_in_sysclk == 2'b01);
 			delay_edge_detect <= toggle_edge_detect_in_sysclk;
-			sys_clk_div4_flag <= delay_edge_detect;
-			
+			div4_flag_quadrature <= {div4_flag_quadrature[2:0],delay_edge_detect};
+			sys_clk_div4_flag <= div4_flag;
+
 			if (sys_clk_div4_flag) begin
 				if (sync_reset_req) sync_reg <= 0;
 				else sync_reg <= ~sync_reg;
