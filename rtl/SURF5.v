@@ -125,7 +125,7 @@ module SURF5(
 	localparam [7:0] DAY = 9;
 	localparam [3:0] MAJOR = 0;
 	localparam [3:0] MINOR = 1;
-	localparam [7:0] REVISION = 19;
+	localparam [7:0] REVISION = 21;
 	localparam [31:0] VERSION = {BOARDREV, MONTH, DAY, MAJOR, MINOR, REVISION };
 	
 	wire [7:0] TD = {8{1'b0}};
@@ -370,6 +370,7 @@ module SURF5(
 	wire [3:0] readout_prescale_sysclk;
 	wire readout_complete_sysclk;
 	wire [15:0] trigger_debug;
+	wire readout_fifo_rst;
 	lab4d_controller u_controller( .clk_i(wbc_clk),.rst_i(wbc_rst),
 											 `WBS_CONNECT(l4_ctrl, wb),
 											 .sys_clk_i(sys_clk),
@@ -378,6 +379,7 @@ module SURF5(
 											 .wclk_i(wclk),
 											 .trig_i(trigger_in),
 											 .readout_o(readout_begin_sysclk),
+											 .readout_fifo_rst_o(readout_fifo_rst),
 											 .readout_address_o(readout_address_sysclk),
 											 .prescale_o(readout_prescale_sysclk),
 											 .complete_i(readout_complete_sysclk),
@@ -401,6 +403,7 @@ module SURF5(
 						  `WBS_CONNECT(l4_ram, wb),
 						  .sys_clk_i(sys_clk),
 						  .readout_i(readout_begin_sysclk),
+						  .readout_fifo_rst_i(readout_fifo_rst),
 						  .prescale_i(readout_prescale_sysclk),
 						  .complete_o(readout_complete_sysclk),
 						  .readout_debug_o(readout_debug),

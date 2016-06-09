@@ -25,6 +25,7 @@ module lab4d_ram(
 		`WBS_NAMED_PORT(wb, 32, 16, 4),
 		input sys_clk_i,
 		input readout_i,
+		input readout_fifo_rst_i,
 		input [15:0] prescale_i,
 		output complete_o,
 		output [23:0] readout_debug_o,
@@ -89,6 +90,7 @@ module lab4d_ram(
 			// So the lab selection picks off bits [14:11].
 			assign lab_read[i] = fifo_read && (wb_adr_i[14:11] == i);
 			lab4d_fifo u_fifo(.wr_clk(sys_clk_i),.wr_en(data_wr),.din({{4{1'b0}},data[12*i +: 12]}),
+									.rst(readout_fifo_rst_i),
 									.rd_clk(clk_i),.rd_en(lab_read[i]),.dout(data_out[i]));
 		end
 	endgenerate

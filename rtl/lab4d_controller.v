@@ -23,6 +23,7 @@ module lab4d_controller(
 		
 		output readout_o,
 		output [5:0] readout_address_o,
+		output readout_fifo_rst_o,
 		output [3:0] prescale_o,
 		input complete_i,
 		
@@ -135,6 +136,7 @@ module lab4d_controller(
 	reg readout_pending = 0;
 	reg readout_done = 0;
 	reg readout_data_not_test_pattern = 0;
+	reg readout_fifo_reset = 0;
 	wire [31:0] readout_register = {{24{1'b0}},readout_pending,{2{1'b0}},readout_data_not_test_pattern,{3{1'b0}},readout_done};
 	
 	//% Holds PicoBlaze in reset.
@@ -242,7 +244,9 @@ module lab4d_controller(
 		if (pb_port[4:0] == 22 && pb_write) readout_done <= pb_outport[0];
 		
 		if (wb_cyc_i && wb_stb_i && wb_we_i && wb_adr_i[6:0] == 7'h58) readout_data_not_test_pattern <= wb_dat_i[4];
-				
+		if (wb_cyc_i && wb_stb_i && wb_we_i && wb_adr_i[6:0] == 7'h58) readout_fifo_reset <= wb_dat_i[1];
+		else readout_fifo_reset <= 0;
+		
 		if (pb_port[4:0] == 19 && pb_write) begin
 			lab4_serial_select <= pb_outport[3:0];
 		end
@@ -428,6 +432,9 @@ module lab4d_controller(
 	assign debug_o[46] = bram_we_enable;
 	assign debug_o[47 +: 8] = pb_port;
 	assign debug_o[55] = dbg_ramp;
+
+	assign readout_fifo_rst_o = readout_fifo_reset;
+		
         assign wb_ack_o = ack;
         assign wb_err_o = 1'b0;
         assign wb_rty_o = 0;
