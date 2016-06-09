@@ -9,6 +9,9 @@ CONSTANT	serial_0,     10
 CONSTANT	serial_1,     11
 CONSTANT	serial_2,     12
 CONSTANT	serial_3,     13
+CONSTANT	ramp_0,	      17
+CONSTANT	trigger_0,    14
+CONSTANT	readout_0,    16
 
 CONSTANT	runmode_request_bit,	02
 CONSTANT	runmode_bit,		04
@@ -16,6 +19,32 @@ CONSTANT	user_serial_request_bit,	80
 CONSTANT	test_request_bit,		80
 CONSTANT	serial_busy_bit,		80
 CONSTANT	serial_GO,			40
+CONSTANT	serial_GO_ALL,			4F
+
+CONSTANT	do_ramp,			40
+CONSTANT	ramp_busy_bit,			80
+
+CONSTANT	do_readout,			40
+CONSTANT	readout_busy_bit,		80
+
+CONSTANT	readout_GCC_reset_0,		00
+CONSTANT	readout_GCC_reset_1,		E0
+CONSTANT	readout_GCC_reset_2,		00
+; SEL_ANY is set in the AMON register.
+; We determine whether we get it or the test pattern
+; from a bit in the readout register. So it's not here.
+CONSTANT	readout_set_selany_1,		C0
+CONSTANT	readout_set_selany_2,		00
+
+CONSTANT	readout_load_addr_2,		01
+CONSTANT	readout_ss_clr_0,		00
+CONSTANT	readout_ss_clr_1,		F0
+CONSTANT	readout_ss_clr_2,		00
+
+CONSTANT	trigger_start_bit,		01
+CONSTANT	trigger_stop_bit,		02
+CONSTANT	trigger_empty_bit,		80
+CONSTANT	trigger_read_bit,		40
 
 reset:
 main:
@@ -31,16 +60,110 @@ main:
 	jump	NZ,	test_request	
 	jump 	main
 
+; OK, so the FIFO is not empty. Read it out.
+readout:
+	load	s0,	trigger_read_bit
+	output	s0,	trigger_0
+	; Now fetch the data.
+	input	s0,	trigger_0
+	and	s0,	F8
+	load	sF,	s0
+readout_begin:
+	input	s0,	serial_3
+	test	s0,	serial_busy_bit
+	jump	NZ,	readout
+	load	s8,	readout_GCC_reset_0
+	load	s9,	readout_GCC_reset_1
+	load	sA,	readout_GCC_reset_2
+	load	sB,	serial_GO_ALL
+	output	s8,	serial_0
+	output	s9,	serial_1
+	output	sA,	serial_2
+	output	sB,	serial_3
+	; prep the next request, which sets SEL_ANY (or not!)
+	input   s8,	readout_0
+	and	s8,	10
+	load	s9,	readout_set_selany_1
+	load	sA,	readout_set_selany_2
+readout_lp1:
+	input	s0,	serial_3
+	test	s0,	serial_busy_bit
+	jump	NZ,	readout_lp1
+	output	s8,	serial_0
+	output	s9,	serial_1
+	output	sA,	serial_2
+	output	sB,	serial_3
+	; prep the next request, which sets the read address
+	load    sA,     readout_load_addr_2
+	load	s9,	sF
+	and     s9,	3F
+	load	s8,	00
+	sr0	s9
+	sra	s8	
+readout_lp2:
+	input	s0,	serial_3
+	test	s0,	serial_busy_bit
+	jump	NZ,	readout_lp2
+	output	s8,	serial_0
+	output	s9,	serial_1
+	output	sA,	serial_2
+	output	sB,	serial_3
+readout_lp3:
+	input	s0,	serial_3
+	test	s0,	serial_busy_bit
+	jump	NZ,	readout_lp3
+	load	s0,	do_ramp
+	output	s0,	ramp_0
+	; prep the next command, which is a sample clear
+	; this could be fixed later to be done once per *total* readout
+	load    s8,  	readout_ss_clr_0
+	load	s9,	readout_ss_clr_1
+	load	sA,	readout_ss_clr_2
+readout_lp4:
+	; wait for ramp
+	input   s0,	ramp_0
+	test	s0,	ramp_busy_bit
+	jump	NZ,	readout_lp4
+	output	s8,	serial_0
+	output	s9,	serial_1
+	output	sA,	serial_2
+	output	sB,	serial_3
+readout_lp5:
+	input	s0,	serial_3
+	test	s0,	serial_busy_bit
+	jump	NZ,	readout_lp5
+	load	s0,	do_readout
+	output	s0,	readout_0
+readout_lp6:
+	input	s0,	readout_0
+	test	s0,	readout_busy_bit
+	jump	NZ,	readout_lp6
+	load	s0,	sF
+	and	s0,	07
+	compare	s0,	07
+	jump	Z,	readout_complete
+	add	sF,	01
+	jump	readout_begin
+readout_complete:
+	return
+
+
 runmode_request:
-	; blah, fake crap
-	; just set running and wait for runmode_stop
+	; issue start_i
+	load	s0,	trigger_start_bit
+	output	s0,	trigger_0
 	load   s0, 	runmode_bit
 	output s0,	control_port
 runmode_loop:
 	; check trigger here
+	input	s0,	trigger_0
+	test	s0,	trigger_empty_bit
+	jump	Z,	readout
 	input	s0,	control_port
 	test	s0,	runmode_request_bit
 	jump	NZ,	runmode_loop
+	load	s0,	trigger_stop_bit
+	output	s0,	trigger_0
 	load	s0,	00
 	output	s0,	control_port
 	jump	main
