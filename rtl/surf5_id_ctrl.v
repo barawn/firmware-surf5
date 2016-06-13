@@ -63,9 +63,15 @@ module surf5_id_ctrl(
 		output sys_clk_div4_flag_o,
 		output sys_clk_div4_o,
 		output sync_o,
+		inout	 sync_mon_io,
 		input  sync_reset_i,
 
 		output wclk_o,
+		
+		output [14:0] phase_scanner_dbg_o,
+		
+		// Montiming.
+		input [11:0] MONTIMING_B,
 		
 		// PPS.
 		input PPS,
@@ -324,6 +330,12 @@ module surf5_id_ctrl(
 		wire SST_FB;
 		wire sys_clk_mmcm;
 		wire sys_clk_div4_mmcm;
+		wire sys_clk_div8_ps_mmcm;
+		wire sys_clk_div8_ps;
+		wire ps_clk = clk_i;
+		wire ps_en;
+		wire ps_incdec;
+		wire ps_done;
 		
 		MMCME2_ADV #(
 		.BANDWIDTH("OPTIMIZED"), // Jitter programming ("HIGH","LOW","OPTIMIZED")
@@ -335,6 +347,8 @@ module surf5_id_ctrl(
 		.CLKOUT0_DIVIDE_F(10.0), // SYSCLK (100 MHz)
 		.CLKOUT1_DIVIDE(5.0),	 // WCLK (200 MHz)
 		.CLKOUT2_DIVIDE(40.0),	 // SYSCLK_DIV4 (25 MHz)
+		.CLKOUT3_DIVIDE(80.0),	 // SYSCLK_DIV8_PS (12.5 MHz)
+		.CLKOUT3_USE_FINE_PS("TRUE"),
 		// CLKOUT0_DUTY_CYCLE - CLKOUT6_DUTY_CYCLE: Duty cycle for CLKOUT outputs (0.01-0.99).
 		.CLKOUT0_DUTY_CYCLE(0.5),
 		// CLKOUT0_PHASE - CLKOUT6_PHASE: Phase offset for CLKOUT outputs (-360.000-360.000).
@@ -347,6 +361,11 @@ module surf5_id_ctrl(
 													.CLKOUT0(sys_clk_mmcm),
 													.CLKOUT1(wclk_mmcm),
 													.CLKOUT2(sys_clk_div4_mmcm),
+													.CLKOUT3(sys_clk_div8_ps_mmcm),
+													.PSCLK(ps_clk),
+													.PSEN(ps_en),
+													.PSINCDEC(ps_incdec),
+													.PSDONE(ps_done),
 													.LOCKED(mmcm_locked),
 													.RST(mmcm_reset),
 													.PWRDWN(mmcm_power_down),
@@ -359,6 +378,7 @@ module surf5_id_ctrl(
 		BUFG u_sysclk_fb(.I(mmcm_fb_out),.O(mmcm_fb_in));
 		BUFG u_sysclk_div4(.I(sys_clk_div4_mmcm),.O(sys_clk_div4_o));
 		BUFG u_wclk(.I(wclk_mmcm),.O(wclk_o));
+		BUFG u_clkps(.I(sys_clk_div8_ps_mmcm),.O(sys_clk_div8_ps));
 		
 		reg [1:0] phase_select = {2{1'b0}};
 		reg phase_select_flag = 0;
@@ -418,6 +438,34 @@ module surf5_id_ctrl(
 			if (sync_reset_i) sync_reset_req <= 1;
 			else if (sys_clk_div4_flag) sync_reset_req <= 0;
 		end
+
+		wire [31:0] phase_scanner_dat_o;
+		wire phase_scanner_ack_o;
+		wire phase_scanner_rty_o;
+		wire phase_scanner_err_o;
+		surf5_phase_scanner u_phase_scanner(.clk_i(clk_i),
+														.wb_cyc_i(wb_cyc_i),
+														.wb_stb_i(wb_stb_i && (wb_adr_i[5:0] == 6'h28 || wb_adr_i[5:0] == 6'h2C)),
+														.wb_adr_i(wb_adr_i[5:0] == 6'h2C),
+														.wb_we_i(wb_we_i),
+														.wb_dat_i(wb_dat_i),
+														.wb_dat_o(phase_scanner_dat_o),
+														.wb_ack_o(phase_scanner_ack_o),
+														.wb_rty_o(phase_scanner_rty_o),
+														.wb_err_o(phase_scanner_err_o),
+														.clk_ps_i(sys_clk_div8_ps),
+														.ps_en_o(ps_en),
+														.ps_incdec_o(ps_incdec),
+														.ps_done_i(ps_done),
+														.sync_i(sync_o),
+														.sync_mon_io(sync_mon_io),
+														.montiming_q_o(phase_scanner_dbg_o[0 +: 12]),
+														.sync_q_o(phase_scanner_dbg_o[12]),
+														.scan_valid_o(phase_scanner_dbg_o[13]),
+														.scan_done_o(phase_scanner_dbg_o[14]),
+														.MONTIMING_B(MONTIMING_B));
+														
+		
 		assign sys_clk_div4_flag_o = sys_clk_div4_flag;
 		
 		// make this disable-able

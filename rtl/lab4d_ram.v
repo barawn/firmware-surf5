@@ -24,11 +24,15 @@ module lab4d_ram(
 		input rst_i,
 		`WBS_NAMED_PORT(wb, 32, 16, 4),
 		input sys_clk_i,
+		// Readout controls, from the LAB4 controller.
 		input readout_i,
+		input readout_rst_i,
 		input readout_fifo_rst_i,
+		output [11:0] readout_fifo_empty_o,
 		input [15:0] prescale_i,
+		
 		output complete_o,
-		output [23:0] readout_debug_o,
+		output [31:0] readout_debug_o,
 		input [11:0] DOE_LVDS_P,
 		input [11:0] DOE_LVDS_N,
 		output [11:0] SS_INCR,
@@ -74,7 +78,7 @@ module lab4d_ram(
 			ACK: state <= IDLE;														// data is at register here
 		endcase
 	end
-	
+
 	wire fifo_read = (wb_cyc_i && wb_stb_i) && (state == IDLE);
 	assign wb_ack_o = (state == ACK);
 	
@@ -90,16 +94,22 @@ module lab4d_ram(
 			// So the lab selection picks off bits [14:11].
 			assign lab_read[i] = fifo_read && (wb_adr_i[14:11] == i);
 			lab4d_fifo u_fifo(.wr_clk(sys_clk_i),.wr_en(data_wr),.din({{4{1'b0}},data[12*i +: 12]}),
-									.rst(readout_fifo_rst_i),
+									.rst(readout_fifo_rst_i),.empty(readout_fifo_empty_o[i]),
 									.rd_clk(clk_i),.rd_en(lab_read[i]),.dout(data_out[i]));
 		end
 	endgenerate
 	
 	wire dbg_ss_incr;
 	wire dbg_srclk;
-	lab4d_data_shift_register_x12 u_shreg(.sys_clk_i(sys_clk_i),.readout_i(readout_i),.done_o(complete_o),.dat_o(data),
+	wire [6:0] sample_counter;
+	wire [3:0] bit_counter;
+	lab4d_data_shift_register_x12 u_shreg(.sys_clk_i(sys_clk_i),
+													  .readout_i(readout_i),.readout_rst_i(readout_rst_i),
+													  .done_o(complete_o),.dat_o(data),
 													  .dat_wr_o(data_wr),.prescale_i(prescale_i),
-													  .ss_incr_o(dbg_ss_incr),.srclk_o(dbg_srclk),.DOE(DOE),.SS_INCR(SS_INCR),.SRCLK(SRCLK));
+													  .ss_incr_o(dbg_ss_incr),.srclk_o(dbg_srclk),
+													  .bit_counter_o(bit_counter),
+													  .sample_counter_o(sample_counter),.DOE(DOE),.SS_INCR(SS_INCR),.SRCLK(SRCLK));
 
 	assign readout_debug_o[0 +: 12] = data[0 +: 12];
 	assign readout_debug_o[12] = DOE[0];
@@ -107,5 +117,7 @@ module lab4d_ram(
 	assign readout_debug_o[14] = readout_i;
 	assign readout_debug_o[15] = dbg_ss_incr;
 	assign readout_debug_o[16] = dbg_srclk;
-	assign readout_debug_o[23:17] = {7{1'b0}};
+	assign readout_debug_o[17] = complete_o;
+	assign readout_debug_o[18 +: 7] = sample_counter;
+	assign readout_debug_o[25 +: 4] = bit_counter;
 endmodule

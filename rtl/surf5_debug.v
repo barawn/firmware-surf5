@@ -15,12 +15,14 @@ module surf5_debug(
 		input wbc_clk_i,
 		input clk0_i,
 		input clk1_i,
+		input clk_big_i,
 		`WBM_NAMED_PORT(wbvio, 32, 20, 4),
 		input [70:0] clk0_debug0_i,
 		input [70:0] clk0_debug1_i,
 		input [70:0] clk0_debug2_i,
 		input [70:0] clk0_debug3_i,
 		input [70:0] clk1_debug_i,
+		input [14:0] clk_big_debug_i,
 		output [7:0] global_debug_o
     );
 
@@ -79,10 +81,11 @@ module surf5_debug(
 	wire [35:0] vio_control;
 	wire [35:0] ila0_control;
 	wire [35:0] ila1_control;
-
-	surf5_icon u_icon(.CONTROL0(vio_control),.CONTROL1(ila0_control),.CONTROL2(ila1_control));
+	wire [35:0] big_ila_control;
+	surf5_icon u_icon(.CONTROL0(vio_control),.CONTROL1(ila0_control),.CONTROL2(ila1_control),.CONTROL3(big_ila_control));
 	surf5_ila u_ila0(.CONTROL(ila0_control),.CLK(clk0_i),.TRIG0(ila0_debug));
 	surf5_ila u_ila1(.CONTROL(ila1_control),.CLK(clk1_i),.TRIG0(ila1_debug));
+	surf5_big_ila u_big_ila(.CONTROL(big_ila_control),.CLK(clk_big_i),.TRIG0(clk_big_debug_i));
 	surf5_vio u_vio(.CONTROL(vio_control),.CLK(wbc_clk_i),.SYNC_IN(vio_sync_out),.SYNC_OUT(vio_sync_in),
 						 .ASYNC_OUT(global_debug_o));
 						 	

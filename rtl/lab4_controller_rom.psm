@@ -66,7 +66,7 @@ readout:
 	output	s0,	trigger_0
 	; Now fetch the data.
 	input	s0,	trigger_0
-	and	s0,	F8
+	and	s0,	18
 	load	sF,	s0
 readout_begin:
 	input	s0,	serial_3
@@ -95,10 +95,15 @@ readout_lp1:
 	output	sB,	serial_3
 	; prep the next request, which sets the read address
 	load    sA,     readout_load_addr_2
+	; Fetch the current block.
 	load	s9,	sF
-	and     s9,	3F
+	; Pick off only the bottom 5 bits.
+	and     s9,	1F
+	; Initialize the bottom byte to 0
 	load	s8,	00
+	; Shift the 5 bits of the address right by 1.
 	sr0	s9
+	; And shift the LSB into the least significant byte. (bits 7:11)
 	sra	s8	
 readout_lp2:
 	input	s0,	serial_3

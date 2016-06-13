@@ -28,7 +28,7 @@ module SURF5(
 		input				MON0,
 		output			MON1,
 		output			MON2,
-		input				MON3,
+		inout				MON3,
 		input				MON4,
 
 		//PCI SIGNALS
@@ -112,6 +112,8 @@ module SURF5(
 		// RFP I2C bus
 		inout				RFP_DAC_SCL,
 		inout				RFP_DAC_SDA,
+		inout	[3:0]		RFP_SCL,
+		inout [3:0]		RFP_SDA,
 		// SPI.
 		output			SPI_CS_neg,
 		output			SPI_D0_MOSI,
@@ -122,10 +124,10 @@ module SURF5(
    
 	localparam [3:0] BOARDREV = 4'h1;
 	localparam [3:0] MONTH = 6;
-	localparam [7:0] DAY = 9;
+	localparam [7:0] DAY = 10;
 	localparam [3:0] MAJOR = 0;
-	localparam [3:0] MINOR = 1;
-	localparam [7:0] REVISION = 21;
+	localparam [3:0] MINOR = 2;
+	localparam [7:0] REVISION = 4;
 	localparam [31:0] VERSION = {BOARDREV, MONTH, DAY, MAJOR, MINOR, REVISION };
 	
 	wire [7:0] TD = {8{1'b0}};
@@ -371,6 +373,8 @@ module SURF5(
 	wire readout_complete_sysclk;
 	wire [15:0] trigger_debug;
 	wire readout_fifo_rst;
+	wire readout_rst;
+	wire [11:0] readout_fifo_empty;
 	lab4d_controller u_controller( .clk_i(wbc_clk),.rst_i(wbc_rst),
 											 `WBS_CONNECT(l4_ctrl, wb),
 											 .sys_clk_i(sys_clk),
@@ -380,9 +384,14 @@ module SURF5(
 											 .trig_i(trigger_in),
 											 .readout_o(readout_begin_sysclk),
 											 .readout_fifo_rst_o(readout_fifo_rst),
+											 .readout_fifo_empty_i(readout_fifo_empty),
+											 .readout_rst_o(readout_rst),
 											 .readout_address_o(readout_address_sysclk),
 											 .prescale_o(readout_prescale_sysclk),
 											 .complete_i(readout_complete_sysclk),
+											 
+											 .montiming_i(montiming_reg),
+											 
 											 .SIN(SIN),
 											 .SCLK(SCLK),
 											 .PCLK(PCLK),
@@ -398,12 +407,15 @@ module SURF5(
 	// LAB4 RAM and serial receiver.
 	// The serial receiver just streams out 128x12 bits and writes them into
 	// block RAM connected to the WISHBONE bus.
-	wire [23:0] readout_debug;
+	wire [31:0] readout_debug;
 	lab4d_ram u_ram( .clk_i(wbc_clk), .rst_i(wbc_rst),
 						  `WBS_CONNECT(l4_ram, wb),
 						  .sys_clk_i(sys_clk),
 						  .readout_i(readout_begin_sysclk),
+						  // FIX THIS
+						  .readout_rst_i(readout_rst),
 						  .readout_fifo_rst_i(readout_fifo_rst),
+						  .readout_fifo_empty_o(readout_fifo_empty),
 						  .prescale_i(readout_prescale_sysclk),
 						  .complete_o(readout_complete_sysclk),
 						  .readout_debug_o(readout_debug),
@@ -415,8 +427,10 @@ module SURF5(
 
 	rfp_top u_rfp(.clk_i(wbc_clk),.rst_i(wbc_rst),
 					  `WBS_CONNECT(rfp, wb),
-					  .RFP_SDA(RFP_DAC_SDA),
-					  .RFP_SCL(RFP_DAC_SCL));
+					  .RFP_DAC_SDA(RFP_DAC_SDA),
+					  .RFP_DAC_SCL(RFP_DAC_SCL),
+					  .RFP_SDA(RFP_SDA),
+					  .RFP_SCL(RFP_SCL));
 						 											    
    // TURFbus. This is the data path back to the TURF.
    // This also needs a slave port definition for the data side bus.
@@ -429,6 +443,7 @@ module SURF5(
    // SURF5 ID and Control block. This allows for reading out device and firmware ID registers,
    // reprogramming the SPI flash, global ICE40 reset, LED control, and clock selection.
    // Also handles external trigger input/debounce.
+	wire [14:0] phase_scanner_dbg;
    surf5_id_ctrl #(.VERSION(VERSION)) u_surf5_id_ctrl(.clk_i(wbc_clk),.rst_i(wbc_rst),
 				 `WBS_CONNECT(s5_id_ctrl, wb),
 				 // Interrupts.
@@ -440,6 +455,7 @@ module SURF5(
 				 .sys_clk_o(sys_clk),
 				 .sys_clk_div4_flag_o(sys_clk_div4_flag),
 				 .sync_o(sync),
+				 .sync_mon_io(MON3),
 				 .sync_reset_i(sync_reset),
 				 .wclk_o(wclk),
 				 // PPS generation, in both domains.
@@ -450,6 +466,10 @@ module SURF5(
 				 // Ext trig generation, in both domains.
 				 .ext_trig_o(global_ext_trig),
 				 .ext_trig_sysclk_o(global_ext_trig_sysclk),
+				 // Phase scanner debug
+				 .phase_scanner_dbg_o(phase_scanner_dbg),				 
+				 // Monitoring inputs.
+				 .MONTIMING_B(MONTIMING_B),
 				 // Ext trig port
 				 .EXT_TRIG(EXT_TRIG),
 				 // PPS port
@@ -476,17 +496,19 @@ module SURF5(
 	assign sysclk_debug[12] = sys_clk_div4_flag;
 	assign sysclk_debug[13] = sync;
 	assign sysclk_debug[16 +: 16] = trigger_debug;
-	assign sysclk_debug[32 +: 24] = readout_debug;
+	assign sysclk_debug[32 +: 32] = readout_debug;
 	
 	surf5_debug u_debug(.wbc_clk_i(wbc_clk),
 							  .clk0_i(wbc_clk),
 							  .clk1_i(sys_clk),
+							  .clk_big_i(wbc_clk),
 							  `WBM_CONNECT(wbvio, wbvio),
 							  .clk0_debug0_i(pci_debug),
 							  .clk0_debug1_i(lab4_debug),
 							  .clk0_debug2_i(wbc_debug),			// unused
 							  .clk0_debug3_i(lab4_i2c_debug),	// unused
 							  .clk1_debug_i(sysclk_debug),		// unused
+							  .clk_big_debug_i(phase_scanner_dbg),
 							  .global_debug_o(global_debug));
 
 	assign SREQ_neg = 1;

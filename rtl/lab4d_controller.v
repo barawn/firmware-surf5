@@ -24,8 +24,12 @@ module lab4d_controller(
 		output readout_o,
 		output [5:0] readout_address_o,
 		output readout_fifo_rst_o,
+		output readout_rst_o,
+		input [11:0] readout_fifo_empty_i,
 		output [3:0] prescale_o,
 		input complete_i,
+		
+		input [11:0] montiming_i,
 		
 		output [11:0] SIN,
 		output [11:0] SCLK,
@@ -133,11 +137,25 @@ module lab4d_controller(
 	reg trigger_reset = 0;
 	wire [31:0] trigger_register = {{13{1'b0}},post_trigger,{8{1'b0}},trigger_empty,1'b0,trigger_address};
 
-	reg readout_pending = 0;
+
+	// Readout Register:
+	// bit 0: readout complete
+	// bit 1: readout fifo reset
+	// bit 2: readout reset
+	// bit 3: data available (any readout fifo is not empty)
+	// bit 4: readout data, not test pattern
+	// bit 5: unused
+	// bit 6: begin readout (from PicoBlaze only)
+	// bit 7: readout pending
+	// bits 15-8: unused
+	// bits 27-16: readout fifo empty 0-11
+	reg readout_pending = 0;	
 	reg readout_done = 0;
 	reg readout_data_not_test_pattern = 0;
 	reg readout_fifo_reset = 0;
-	wire [31:0] readout_register = {{24{1'b0}},readout_pending,{2{1'b0}},readout_data_not_test_pattern,{3{1'b0}},readout_done};
+	reg readout_reset = 0;
+	wire data_available = (readout_fifo_empty_i != {12{1'b1}});
+	wire [31:0] readout_register = {{4{1'b0}},readout_fifo_empty_i,{8{1'b0}},readout_pending,{2{1'b0}},readout_data_not_test_pattern,1'b0,data_available,1'b0,readout_done};
 	
 	//% Holds PicoBlaze in reset.
 	reg processor_reset = 0;
@@ -243,9 +261,16 @@ module lab4d_controller(
 
 		if (pb_port[4:0] == 22 && pb_write) readout_done <= pb_outport[0];
 		
-		if (wb_cyc_i && wb_stb_i && wb_we_i && wb_adr_i[6:0] == 7'h58) readout_data_not_test_pattern <= wb_dat_i[4];
-		if (wb_cyc_i && wb_stb_i && wb_we_i && wb_adr_i[6:0] == 7'h58) readout_fifo_reset <= wb_dat_i[1];
-		else readout_fifo_reset <= 0;
+		if (wb_cyc_i && wb_stb_i && wb_we_i && wb_adr_i[6:0] == 7'h58) begin
+			readout_data_not_test_pattern <= wb_dat_i[4];
+			readout_fifo_reset <= wb_dat_i[1];
+			readout_reset <= wb_dat_i[2];
+		end else begin
+			readout_fifo_reset <= 0;
+			readout_reset <= 0;
+		end
+		
+		
 		
 		if (pb_port[4:0] == 19 && pb_write) begin
 			lab4_serial_select <= pb_outport[3:0];
@@ -405,7 +430,7 @@ module lab4d_controller(
 	assign register_mux[19] = {32{1'b0}};
 	assign register_mux[20] = {32{1'b0}};
 	assign register_mux[21] = trigger_register;
-	assign register_mux[22] = {32{1'b0}};
+	assign register_mux[22] = readout_register;
 	assign register_mux[23] = {32{1'b0}};
 	assign register_mux[24] = {32{1'b0}};
 	assign register_mux[25] = {32{1'b0}};
@@ -434,7 +459,8 @@ module lab4d_controller(
 	assign debug_o[55] = dbg_ramp;
 
 	assign readout_fifo_rst_o = readout_fifo_reset;
-		
+	flag_sync u_readout_rst(.in_clkA(readout_reset),.clkA(clk_i),.out_clkB(readout_rst_o),.clkB(sys_clk_i));
+	
         assign wb_ack_o = ack;
         assign wb_err_o = 1'b0;
         assign wb_rty_o = 0;
