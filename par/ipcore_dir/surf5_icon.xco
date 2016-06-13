@@ -1,7 +1,7 @@
 ##############################################################
 #
 # Xilinx Core Generator version 14.7
-# Date: Wed May 04 17:48:37 2016
+# Date: Mon Jun 13 18:28:04 2016
 #
 ##############################################################
 #
@@ -30,7 +30,7 @@ SET foundationsym = false
 SET implementationfiletype = Ngc
 SET package = fbg676
 SET removerpms = false
-SET simulationfiles = Structural
+SET simulationfiles = Behavioral
 SET speedgrade = -2
 SET verilogsim = true
 SET vhdlsim = false
@@ -43,7 +43,7 @@ CSET component_name=surf5_icon
 CSET constraint_type=external
 CSET enable_jtag_bufg=true
 CSET example_design=false
-CSET number_control_ports=3
+CSET number_control_ports=4
 CSET use_ext_bscan=false
 CSET use_softbscan=false
 CSET use_unused_bscan=false
@@ -53,4 +53,4 @@ CSET user_scan_chain=USER1
 MISC pkg_timestamp=2013-10-13T14:12:40Z
 # END Extra information
 GENERATE
-# CRC: 47f3659d
+# CRC: 91592ac3

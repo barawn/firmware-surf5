@@ -8,7 +8,7 @@
 // \   \   \/     Version    : 14.7
 //  \   \         Application: Xilinx CORE Generator
 //  /   /         Filename   : surf5_icon.v
-// /___/   /\     Timestamp  : Wed May 04 13:49:48 Eastern Daylight Time 2016
+// /___/   /\     Timestamp  : Mon Jun 13 14:28:37 Eastern Daylight Time 2016
 // \   \  /  \
 //  \___\/\___\
 //
@@ -21,11 +21,13 @@
 module surf5_icon(
     CONTROL0,
     CONTROL1,
-    CONTROL2) /* synthesis syn_black_box syn_noprune=1 */;
+    CONTROL2,
+    CONTROL3) /* synthesis syn_black_box syn_noprune=1 */;
 
 
 inout [35 : 0] CONTROL0;
 inout [35 : 0] CONTROL1;
 inout [35 : 0] CONTROL2;
+inout [35 : 0] CONTROL3;
 
 endmodule

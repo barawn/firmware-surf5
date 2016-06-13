@@ -1,10 +1,10 @@
 # Output products list for <surf5_icon>
+_xmsgs\pn_parser.xmsgs
 surf5_icon.asy
 surf5_icon.constraints\surf5_icon.ucf
 surf5_icon.constraints\surf5_icon.xdc
 surf5_icon.gise
 surf5_icon.ngc
-surf5_icon.sym
 surf5_icon.ucf
 surf5_icon.v
 surf5_icon.veo
