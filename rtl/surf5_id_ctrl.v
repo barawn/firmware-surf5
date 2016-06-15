@@ -95,6 +95,11 @@ module surf5_id_ctrl(
 		parameter DEVICE = "S5A7";
 		parameter VERSION = 32'h00000000;
 
+		// Device DNA (used for identification)
+		wire dna_data;
+		reg read_reg = 0;
+		reg shift_reg = 0;
+
 		reg wb_ack_mux;
 		reg [31:0] wb_data_out_mux;
 		// Our internal space is 4 bits wide = 16 registers (5:2 only matter).
@@ -140,7 +145,7 @@ module surf5_id_ctrl(
 		wire mmcm_clkfbstopped;
 		wire mmcm_clkinstopped;
 		always @(posedge clk_i) begin
-			internal_ack <= wb_cyc_i && wb_stb_i && !(pll_drp_select || spi_select);
+			internal_ack <= wb_cyc_i && wb_stb_i && !(pll_drp_select || spi_select) && !internal_ack;
 		end
 
 		always @(*) begin
@@ -173,7 +178,7 @@ module surf5_id_ctrl(
 		`define OUTPUTSELECT(addr, x, y, dummy)																		\
 					wire y;																											\
 					localparam [BASEWIDTH-1:0] addr_``y = addr;															\
-					assign y = (wb_cyc_i && wb_stb_i && wb_we_i && wb_ack_o && (BASE(wb_adr_i) == addr_``y));	\
+					assign y = (wb_cyc_i && wb_stb_i && wb_ack_o && (BASE(wb_adr_i) == addr_``y));	\
 					assign wishbone_registers[ addr ] = x
 
 		`define SIGNALRESET(addr, x, range, resetval)																	\
@@ -197,9 +202,8 @@ module surf5_id_ctrl(
 		`WISHBONE_ADDRESS( 16'h001C, clocksel_reg, SIGNALRESET, [31:0], {32{1'b0}});
 		`WISHBONE_ADDRESS( 16'h0020, pllctrl_reg, OUTPUTSELECT, sel_pllctrl_reg, 0);
 		`WISHBONE_ADDRESS( 16'h0024, spiss_reg, SIGNALRESET, [31:0], {32{1'b0}});
-		`WISHBONE_ADDRESS( 16'h0028, phase_select_sel, SELECT, 0, 0);
-		`WISHBONE_ADDRESS( 16'h0028, {32{1'b0}}, OUTPUT, [31:0], 0);
-		`WISHBONE_ADDRESS( 16'h002C, {32{1'b0}}, OUTPUT, [31:0], 0);
+		`WISHBONE_ADDRESS( 16'h0028, {{30{1'b0}},phase_select}, OUTPUTSELECT, sel_phase_select, 0);
+		`WISHBONE_ADDRESS( 16'h002C, {{31{1'b0}},dna_data}, OUTPUTSELECT, sel_dna, 0);
 		// Shadow registers - never accessed (the SPI core takes over). Just here to make decoding easier.
 		`WISHBONE_ADDRESS( 16'h0030, pps_sel_reg, OUTPUT, [31:0], 0);
 		`WISHBONE_ADDRESS( 16'h0034, reset_reg, OUTPUT, [31:0], 0);
@@ -211,7 +215,7 @@ module surf5_id_ctrl(
 		always @(posedge clk_i) begin : INTERRUPT_STATUS_REGISTER
 			if (rst_i) int_sr_reg <= {32{1'b0}};
 			else begin
-				if (sel_int_sr_reg) int_sr_reg <= int_sr_reg & ~wb_dat_i;
+				if (sel_int_sr_reg && wb_we_i) int_sr_reg <= int_sr_reg & ~wb_dat_i;
 				else int_sr_reg <= {interrupt_i, spi_inta_o};
 			end
 		end
@@ -219,7 +223,7 @@ module surf5_id_ctrl(
 		always @(posedge clk_i) begin : LED_REGISTER
 			if (rst_i) led_reg <= {32{1'b0}};
 			else begin
-				if (sel_led_reg) begin
+				if (sel_led_reg && wb_we_i) begin
 					led_reg[31:16] <= wb_dat_i[31:16];
 					led_reg[11:0] <= (wb_dat_i[11:0] & wb_dat_i[27:16]) | (internal_led_i[11:0] & ~wb_dat_i[27:16]);
 					led_reg[15:12] <= wb_dat_i[15:12];
@@ -230,7 +234,7 @@ module surf5_id_ctrl(
 		end
 		//% PLL control register.
 		always @(posedge clk_i) begin : PLLCTRL_REGISTER
-			if (sel_pllctrl_reg) begin
+			if (sel_pllctrl_reg && wb_we_i) begin
 				pllctrl_reg[0] <= wb_dat_i[0]; 		// reset
 				pllctrl_reg[1] <= wb_dat_i[1];		// clock select
 				pllctrl_reg[2] <= wb_dat_i[2];		// power down
@@ -265,8 +269,15 @@ module surf5_id_ctrl(
 									 .USRCCLKTS(1'b0),
 									 .USRDONEO(1'b1),
 									 .USRDONETS(1'b1));
-	
-		
+		// Device DNA.
+		DNA_PORT u_dna(.DIN(1'b0),.READ(read_reg),.SHIFT(shift_reg),.CLK(clk_i),.DOUT(dna_data));		
+		always @(posedge clk_i) begin
+			if (sel_dna && ~wb_we_i && wb_ack_o) shift_reg <= 1;
+			else shift_reg <= 0;
+			if (sel_dna && wb_we_i && wb_ack_o) read_reg <= wb_dat_i[31];
+			else read_reg <= 0;
+		end
+			
 		// LED register:
 		// bits [27:16]: override internal LED values and replace with written values.
 		// bits 11:0: either current state of internal LEDs, or overridden values.
@@ -384,7 +395,7 @@ module surf5_id_ctrl(
 		wire div4_flag = div4_flag_quadrature[phase_select_sysclk];
 
 		always @(posedge clk_i) begin
-			if (phase_select_sel) begin
+			if (sel_phase_select && wb_we_i) begin
 				phase_select <= wb_dat_i[1:0];
 				phase_select_flag <= 1;
 			end else begin
