@@ -69,6 +69,8 @@ find_edge_command_jp:
 		call	find_edge
 		output	s0,	result_0
 		output	s1,	result_1
+		load	s0,	command_IDLE
+		output	s0,	command_port
 		jump	main
 ; Return the value of an input at a step point.
 ; Argument's low 13 bits is the step point.
@@ -83,6 +85,8 @@ get_value_command_jp:
 		call	latch
 		input	s2,	(s3)
 		output	s2,	result_0
+		load	s0,	command_IDLE
+		output	s0,	command_port
 		jump	main
 ; Measure the total width of a particular input.
 ; Argument's low 4 bits determine which input.
