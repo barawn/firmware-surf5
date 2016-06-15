@@ -402,8 +402,8 @@ module surf5_id_ctrl(
 				phase_select_flag <= 0;
 			end
 		end
-		flag_sync u_phase_wr_sync(.in_clkA(phase_select_flag),.clkA(clk_i),.out_clkB(sys_clk_i),.clkB(phase_select_flag_sysclk));
-		always @(posedge sys_clk_i) begin
+		flag_sync u_phase_wr_sync(.in_clkA(phase_select_flag),.clkA(clk_i),.out_clkB(phase_select_flag_sysclk),.clkB(sys_clk_o));
+		always @(posedge sys_clk_o) begin
 			if (phase_select_flag_sysclk)
 				phase_select_sysclk <= phase_select;
 		end
