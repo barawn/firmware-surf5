@@ -21,6 +21,14 @@ module lab4d_controller(
 		input wclk_i,
 		input trig_i,
 		
+		input clk_ps_i,
+		output ps_clk_o,
+		output ps_en_o,
+		output ps_incdec_o,
+		input  ps_done_i,
+		input  [11:0] MONTIMING_B,
+		inout  sync_mon_io,
+		
 		output readout_o,
 		output [5:0] readout_address_o,
 		output readout_fifo_rst_o,
@@ -41,7 +49,9 @@ module lab4d_controller(
 		input [11:0] SHOUT,
 		output [59:0] WR,
 		output [70:0] debug_o,
-		output [15:0] trigger_debug_o
+		output [70:0] debug2_o,
+		output [15:0] trigger_debug_o,
+		output [14:0] phase_scanner_debug_o
     );
 	
 	localparam [3:0] READOUT_PRESCALE_DEFAULT = 4'h0;
@@ -55,20 +65,20 @@ module lab4d_controller(
 	// 2: readout prescale
 	// 3: ramp to wilkinson delay
 	// 4: wilkinson max count
-	// 5: test pattern control
+	// 5: phase reset register
 	// 6: LAB4 serial write
-	// 7: LAB4_0 SHOUT readback
-	// 8: LAB4_1 SHOUT readback
-	// 9: LAB4_2 SHOUT readback
-	// 10: LAB4_3 SHOUT readback
-	// 11: LAB4_4 SHOUT readback
-	// 12: LAB4_5 SHOUT readback
-	// 13: LAB4_6 SHOUT readback
-	// 14: LAB4_7 SHOUT readback
-	// 15: LAB4_8 SHOUT readback
-	// 16: LAB4_9 SHOUT readback
-	// 17: LAB4_10 SHOUT readback
-	// 18: LAB4_11 SHOUT readback
+	// 7: shadow 3
+	// 8: phase scanner reg 0
+	// 9: phase scanner reg 1
+	// 10: phase scanner reg 2
+	// 11: phase scanner reg 3
+	// 12: phase scanner reg 4
+	// 13: phase scanner reg 5
+	// 14: phase scanner reg 6
+	// 15: phase scanner reg 7
+	// 16: shadow 0
+	// 17: shadow 1
+	// 18: shadow 2
 	// 19: current buffer
 	// 20: last trigger buffer
 	// 21: trigger control
@@ -77,30 +87,82 @@ module lab4d_controller(
 	// 31: picoblaze bram
 	
 	wire [31:0] register_mux[31:0];
+	
+	wire [31:0] lab4_control_register;
+	wire [31:0] readout_prescale_register;
+	wire [31:0] shift_prescale_register;
+	wire [31:0] ramp_to_wilkinson_register;
+	wire [31:0] wclk_stop_count_register;
+	wire [31:0] phase_reset_register;
+	wire [31:0] lab4_user_write_register;
+	
+	wire [31:0] phase_scanner_dat_o;
+
+	wire [31:0] trigger_register;
+	wire [31:0] readout_register;
+
+	wire [31:0] pb_bram_data;
+
+
+	assign register_mux[0] = lab4_control_register;
+	assign register_mux[1] = shift_prescale_register;
+	assign register_mux[2] = readout_prescale_register;
+	assign register_mux[3] = ramp_to_wilkinson_register;
+	assign register_mux[4] = wclk_stop_count_register;
+	assign register_mux[5] = phase_reset_register;
+	assign register_mux[6] = lab4_user_write_register;
+	assign register_mux[7] = register_mux[3];						// reserved
+	assign register_mux[8] = phase_scanner_dat_o;				// phase scanner gets 01xxx xx (e.g. [6:5] == 01)
+	assign register_mux[9] = phase_scanner_dat_o;
+	assign register_mux[10] = phase_scanner_dat_o;
+	assign register_mux[11] = phase_scanner_dat_o;
+	assign register_mux[12] = phase_scanner_dat_o;
+	assign register_mux[13] = phase_scanner_dat_o;
+	assign register_mux[14] = phase_scanner_dat_o;
+	assign register_mux[15] = phase_scanner_dat_o;
+	assign register_mux[16] = register_mux[0];
+	assign register_mux[17] = register_mux[1];
+	assign register_mux[18] = register_mux[2];
+	assign register_mux[19] = {32{1'b0}};
+	assign register_mux[20] = {32{1'b0}};
+	assign register_mux[21] = trigger_register;
+	assign register_mux[22] = readout_register;
+	assign register_mux[23] = register_mux[3];
+	assign register_mux[24] = phase_scanner_dat_o;
+	assign register_mux[25] = phase_scanner_dat_o;
+	assign register_mux[26] = phase_scanner_dat_o;
+	assign register_mux[27] = phase_scanner_dat_o;
+	assign register_mux[28] = phase_scanner_dat_o;
+	assign register_mux[29] = phase_scanner_dat_o;
+	assign register_mux[30] = phase_scanner_dat_o;
+	assign register_mux[31] = pb_bram_data;
 	assign wb_dat_o = register_mux[wb_adr_i[6:2]];
 
-        reg ack = 0;
+
+
+
+   reg ack = 0;
 
 	reg lab4_control_reset_request = 0;
 	reg lab4_runmode_request = 0;
 	reg lab4_runmode = 0;
 	reg [11:0] lab4_regclear = {12{1'b0}};
 	wire lab4_running;
-	wire [31:0] lab4_control_register = {{4{1'b0}},lab4_regclear,{12{1'b0}},lab4_running,lab4_runmode,lab4_runmode_request,lab4_control_reset_request};
+	assign lab4_control_register = {{4{1'b0}},lab4_regclear,{12{1'b0}},lab4_running,lab4_runmode,lab4_runmode_request,lab4_control_reset_request};
 
 	reg [3:0] readout_prescale = READOUT_PRESCALE_DEFAULT;
-	wire [31:0] readout_prescale_register = {{28{1'b0}},readout_prescale};
+	assign readout_prescale_register = {{28{1'b0}},readout_prescale};
 
 	reg [7:0] shift_prescale = SHIFT_PRESCALE_DEFAULT;
-	wire [31:0] shift_prescale_register = {{24{1'b0}},shift_prescale_register};
+	assign shift_prescale_register = {{24{1'b0}},shift_prescale_register};
 
 	reg update_wilkinson = 0;
 
 	reg [15:0] ramp_to_wilkinson = RAMP_TO_WILKINSON_DEFAULT;
-	wire [31:0] ramp_to_wilkinson_register = {{16{1'b0}},ramp_to_wilkinson};
+	assign ramp_to_wilkinson_register = {{16{1'b0}},ramp_to_wilkinson};
 
 	reg [15:0] wclk_stop_count = WCLK_STOP_COUNT_DEFAULT;
-	wire [31:0] wclk_stop_count_register = {{16{1'b0}},wclk_stop_count};
+	assign wclk_stop_count_register = {{16{1'b0}},wclk_stop_count};
 	
 	wire do_ramp;
 	reg ramp_pending = 0;
@@ -111,7 +173,7 @@ module lab4d_controller(
 	reg [23:0] lab4_user_write = {24{1'b0}};
 	reg [3:0] lab4_user_select = {4{1'b0}};
 	reg lab4_user_write_request = 0;
-	wire [31:0] lab4_user_write_register = 
+	assign lab4_user_write_register = 
 		{lab4_user_write_request,3'b000,lab4_user_select,lab4_user_write};
 
 	// actual serial register
@@ -120,11 +182,12 @@ module lab4d_controller(
 	reg [3:0] lab4_serial_select = {4{1'b0}};
 	wire lab4_serial_go;
 	
-	// test pattern interface
-	reg [11:0] test_pattern_data = {12{1'b0}};
-	reg test_pattern_request = 0;
-	wire [31:0] test_pattern_register = {test_pattern_request,{15{1'b0}},{4{1'b0}},test_pattern_data};
-
+	// PHAB reset interface
+	reg [11:0] phab_at_latch = {12{1'b0}};
+	reg [1:0] phab_phase_select = {2{1'b0}};
+	reg phab_target_value = 0;
+	assign phase_reset_register = {{4{1'b0}},phab_at_latch,{7{1'b0}},phab_target_value,{6{1'b0}},phab_phase_select};
+	
 	// still sucks, not as much
 	wire trigger_empty;
 	wire trigger_start;
@@ -135,7 +198,7 @@ module lab4d_controller(
 	reg [2:0] post_trigger = {3{1'b0}};
 	reg post_trigger_wr = 0;
 	reg trigger_reset = 0;
-	wire [31:0] trigger_register = {{13{1'b0}},post_trigger,{8{1'b0}},trigger_empty,1'b0,trigger_address};
+	assign trigger_register = {{13{1'b0}},post_trigger,{8{1'b0}},trigger_empty,1'b0,trigger_address};
 
 
 	// Readout Register:
@@ -155,7 +218,7 @@ module lab4d_controller(
 	reg readout_fifo_reset = 0;
 	reg readout_reset = 0;
 	wire data_available = (readout_fifo_empty_i != {12{1'b1}});
-	wire [31:0] readout_register = {{4{1'b0}},readout_fifo_empty_i,{8{1'b0}},readout_pending,{2{1'b0}},readout_data_not_test_pattern,1'b0,data_available,1'b0,readout_done};
+	assign readout_register = {{4{1'b0}},readout_fifo_empty_i,{8{1'b0}},readout_pending,{2{1'b0}},readout_data_not_test_pattern,1'b0,data_available,1'b0,readout_done};
 	
 	//% Holds PicoBlaze in reset.
 	reg processor_reset = 0;
@@ -211,10 +274,10 @@ module lab4d_controller(
 	assign pb_inport[1] = lab4_control_register[2:0];
 	assign pb_inport[2] = lab4_control_register[2:0];
 	assign pb_inport[3] = lab4_control_register[2:0];
-	assign pb_inport[4] = test_pattern_register[7:0];
-	assign pb_inport[6] = test_pattern_register[7:0];
-	assign pb_inport[5] = {1'b0,test_pattern_request,2'b00,test_pattern_register[11:8]};
-	assign pb_inport[7] = {1'b0,test_pattern_request,2'b00,test_pattern_register[11:8]};
+	assign pb_inport[4] = 8'h00;
+	assign pb_inport[6] = 8'h00;
+	assign pb_inport[5] = 8'h00;
+	assign pb_inport[7] = 8'h00;
 	assign pb_inport[8] = lab4_user_write_register[7:0];
 	assign pb_inport[12] = lab4_user_write_register[7:0];
 	assign pb_inport[9] = lab4_user_write_register[15:8];
@@ -295,13 +358,7 @@ module lab4d_controller(
 			lab4_runmode_request <= wb_dat_i[1];
 			lab4_regclear <= wb_dat_i[16 +: 12];
 		end
-		
-		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:0] == 7'h14))
-			test_pattern_request <= wb_dat_i[31];
-		else if (pb_port[4:0] == 5 && pb_write) begin
-			test_pattern_request <= pb_outport[7];
-		end
-		
+				
 		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:0] == 7'h18)) begin
 			lab4_user_write <= wb_dat_i[0 +: 24];
 			lab4_user_select <= wb_dat_i[24 +: 4];
@@ -395,6 +452,27 @@ module lab4d_controller(
 										 .WCLK_P(WCLK_P),
 										 .WCLK_N(WCLK_N));
 
+	wire phase_scanner_ack;
+	wire phase_scanner_err;
+	wire phase_scanner_rty;
+	surf5_phase_scanner_v2 u_phase_scanner(.clk_i(clk_i),.rst_i(rst_i),
+														.wb_cyc_i(wb_cyc_i),.wb_stb_i(wb_stb_i && wb_adr_i[6:5] == 2'b01),
+														.wb_adr_i(wb_adr_i[4:2]),
+														.wb_we_i(wb_we_i),.wb_dat_i(wb_dat_i),
+														.wb_dat_o(phase_scanner_dat_o),
+														.wb_ack_o(phase_scanner_ack),
+														.wb_err_o(phase_scanner_err),
+														.wb_rty_o(phase_scanner_rty),
+														.clk_ps_i(clk_ps_i),
+														.ps_clk_o(ps_clk_o),
+														.ps_en_o(ps_en_o),
+														.ps_incdec_o(ps_incdec_o),
+														.ps_done_i(ps_done_i),
+														.MONTIMING_B(MONTIMING_B),
+														.sync_mon_io(sync_mon_io),
+														.debug_o(phase_scanner_debug_o),
+														.debug2_o(debug2_o));
+
 	kcpsm6 processor(.address(pbAddress),.instruction(pbInstruction),
 														  .bram_enable(pbRomEnable),.in_port(pb_inport_mux),
 														  .out_port(pb_outport),.port_id(pb_port),
@@ -406,40 +484,7 @@ module lab4d_controller(
 											 .enable(pbRomEnable),
 											 .bram_we_i(bram_we && bram_we_enable),.bram_adr_i(bram_address_reg),
 											 .bram_dat_i(bram_data_reg),.bram_dat_o(bram_readback),
-											 .bram_rd_i(1'b1),.clk(clk_i));
-	
-	assign register_mux[0] = lab4_control_register;
-	assign register_mux[1] = shift_prescale_register;
-	assign register_mux[2] = readout_prescale_register;
-	assign register_mux[3] = ramp_to_wilkinson_register;
-	assign register_mux[4] = wclk_stop_count_register;
-	assign register_mux[5] = test_pattern_register;
-	assign register_mux[6] = {32{1'b0}};
-	assign register_mux[7] = {32{1'b0}};
-	assign register_mux[8] = {32{1'b0}};
-	assign register_mux[9] = {32{1'b0}};
-	assign register_mux[10] = {32{1'b0}};
-	assign register_mux[11] = {32{1'b0}};
-	assign register_mux[12] = {32{1'b0}};
-	assign register_mux[13] = {32{1'b0}};
-	assign register_mux[14] = {32{1'b0}};
-	assign register_mux[15] = {32{1'b0}};
-	assign register_mux[16] = {32{1'b0}};
-	assign register_mux[17] = {32{1'b0}};
-	assign register_mux[18] = {32{1'b0}};
-	assign register_mux[19] = {32{1'b0}};
-	assign register_mux[20] = {32{1'b0}};
-	assign register_mux[21] = trigger_register;
-	assign register_mux[22] = readout_register;
-	assign register_mux[23] = {32{1'b0}};
-	assign register_mux[24] = {32{1'b0}};
-	assign register_mux[25] = {32{1'b0}};
-	assign register_mux[26] = {32{1'b0}};
-	assign register_mux[27] = {32{1'b0}};
-	assign register_mux[28] = {32{1'b0}};
-	assign register_mux[29] = {32{1'b0}};
-	assign register_mux[30] = {32{1'b0}};
-	assign register_mux[31] = pb_bram_data;
+											 .bram_rd_i(1'b1),.clk(clk_i));	
 
 	assign REGCLR = lab4_regclear;
 

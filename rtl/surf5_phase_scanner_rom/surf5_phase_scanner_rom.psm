@@ -1,0 +1,204 @@
+CONSTANT	status_port,  00
+CONSTANT	command_port, 01
+CONSTANT	argument_0,   02
+CONSTANT	argument_1,   03
+CONSTANT	argument_2,   04
+CONSTANT	argument_3,   05
+CONSTANT	result_0,     06
+CONSTANT	result_1,     07
+CONSTANT	zero_0,	      08
+CONSTANT	zero_1,	      09
+
+CONSTANT	mon_base,     10
+
+CONSTANT	ps_done_bit,	01
+CONSTANT	latch_done_bit,	02
+CONSTANT	phase_inc,	0C
+CONSTANT	phase_dec,	04
+CONSTANT	do_latch,	10
+CONSTANT	valid,		40
+CONSTANT	done,		80
+
+; Notes:
+; s0-s7 are general purpose registers.
+; s8 is scratch, used by utility functions.
+; sE/sF contain the current step.
+NAMEREG		sE,		step_0
+NAMEREG		sF,		step_1
+
+CONSTANT	step_max_0,	80
+CONSTANT	step_max_1,	11
+CONSTANT	step_half_0,	C0
+CONSTANT	step_half_1,	08
+
+CONSTANT	command_IDLE,		00
+CONSTANT	command_FREE_SCAN,	01
+CONSTANT	command_FULL_WIDTH,	02
+CONSTANT	command_GET_VALUE,	03
+CONSTANT	command_FIND_EDGE,	04
+
+reset:		load	step_0,	00
+		load	step_1,	00
+main:		input	s0,	command_port
+		compare	s0,	command_FREE_SCAN
+		jump	Z,	free_scan
+		compare	s0,	command_FULL_WIDTH
+		jump	Z,	full_width_measure
+		compare	s0,	command_GET_VALUE
+		jump	Z,	get_value
+		compare	s0,	command_FIND_EDGE
+		jump	Z,	find_edge_command
+		jump	main
+
+latch:		load	s0,	do_latch
+		output	s0,	status_port
+latch_lp1:	input	s0,	status_port
+		test	s0,	latch_done_bit
+		jump	Z,	latch_lp1
+		return
+
+; Finds an edge.
+; Argument's low 13 bits indicate the starting point.
+; Bits [19:16] indicate which input.
+; Bit  [24]    indicates a rising (0) or falling (1) edge.
+find_edge_command:
+		input	s0,	argument_0
+		input	s1,	argument_1
+		input	s2,	argument_2
+		and	s2,	0F
+		input	s3,	argument_3
+		call	go_to_step
+		load	s0,	s2
+		load	s1,	s3
+		call	find_edge
+		output	s0,	result_0
+		output	s1,	result_1
+		return
+; Find edge. s0 contains the input, and s1
+; contains positive/negative edge.
+; Edge has to be stable for 4 steps.
+find_edge:
+		add	s0,	mon_base
+		load	s3,	00
+find_edge_lp1:
+		call	latch
+		input	s2,	(s0)
+; First find the opposite value from the desired target.
+  	     	compare	s2,	s1
+		jump	NZ,	find_edge_jp1
+		call	step_increment
+		jump	find_edge_lp1
+; The input is now the opposite of what we want.
+; Now we search for 4 stable steps of our desired target.
+find_edge_jp1:	call  	step_increment
+		call	latch
+		input	s2,	(s0)
+		compare	s2,	s1
+		jump	NZ,	find_edge_jp2
+; We found our target, increment s3
+     	        add     s3,	01
+		compare	s3,	04
+		jump	NZ,	find_edge_jp1
+; Passed the stable tap threshold. Back up 3 steps (to where the edge was).
+		load	s0,	step_0
+		load	s1,	step_1
+		sub	s0,	03
+		subcy	s1,	00
+		return
+; No target. Reset s3 (step counter) and continue.
+find_edge_jp2:	load	s3,	00		
+		jump	find_edge_jp1
+		
+; Return the value of an input at a step point.
+; Argument's low 13 bits is the step point.
+; Bits [19:16] indicate which input.
+get_value:
+		input	s0,	argument_0
+		input	s1,	argument_1
+		input	s3,	argument_2
+		and	s3,	0F
+		add	s3,	mon_base
+		call 	go_to_step
+		call	latch
+		input	s2,	(s3)
+		output	s2,	result_0
+		return
+		
+; Measure the total width of a particular input.
+; Argument's low 4 bits determine which input.
+full_width_measure:
+		input	s3,	argument_0
+		and	s3,	0F
+		add	s3,	mon_base
+		load	s4,	00
+		load	s5,	00
+		load	s0,	00
+		load	s1,	00
+		call	go_to_step
+full_width_measure_lp1:
+		call	latch
+		input	s2,	(s3)
+		add	s4,	s2
+		addcy	s5,	00
+		call	step_increment
+		compare		step_0,	00
+		comparecy	step_1, 00
+		jump	NZ,	full_width_measure_lp1
+		output	s4,	result_0
+		output	s5,	result_1
+		load	s0,	command_IDLE
+		output	s0,	command_port
+		return
+
+free_scan:	load	s0,	00
+		load	s1,	00
+		call	go_to_step
+free_scan_lp1:
+		call	latch
+		load	s0,	valid
+		output	s0,	status_port
+		call	step_increment
+		compare		step_0,	00
+		comparecy	step_1,	00
+		jump	NZ, free_scan_lp1
+		load	s0,	done
+		output	s0,	status_port
+		return	
+
+; this is crude and slow, but whatever
+go_to_step:	compare s0,	step_0
+		comparecy s1,	step_1
+		return 	Z
+		call	step_increment
+		jump	go_to_step
+
+poll_done:	input	s8,	status_port
+		test	s8,	ps_done_bit
+		jump	Z,	poll_done
+		return
+
+step_increment:	load	s8,	phase_inc
+		output 	s8,	status_port
+		call	poll_done
+		add	step_0,	01
+		addcy	step_1,	00
+		compare 	step_0,	step_max_0
+		comparecy 	step_1,	step_max_1
+		return	NZ
+		load	step_0,	00
+		load	step_1,	00
+		return
+		
+step_decrement:	load	s8,	phase_dec
+		output	s8,	status_port
+		call	poll_done
+		compare		step_0,	00
+		comparecy 	step_1,	00
+		jump	NZ,	step_decrement_jp1
+		load	step_0,	step_max_0
+		load	step_1,	step_max_1
+step_decrement_jp1:
+		sub	step_0,	01
+		subcy	step_1,	00
+		return
+		

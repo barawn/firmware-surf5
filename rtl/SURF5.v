@@ -127,7 +127,7 @@ module SURF5(
 	localparam [7:0] DAY = 10;
 	localparam [3:0] MAJOR = 0;
 	localparam [3:0] MINOR = 2;
-	localparam [7:0] REVISION = 4;
+	localparam [7:0] REVISION = 6;
 	localparam [31:0] VERSION = {BOARDREV, MONTH, DAY, MAJOR, MINOR, REVISION };
 	
 	wire [7:0] TD = {8{1'b0}};
@@ -175,6 +175,8 @@ module SURF5(
 	wire [70:0] wbc_debug;
 	// LAB4 Controller debug
 	wire [70:0] lab4_debug;
+	// LAB4 second debug
+	wire [70:0] lab4_debug2;
 	// PCI clock debug.
 	wire [70:0] pci_debug;
 	
@@ -206,6 +208,16 @@ module SURF5(
 	
    //% System clock (100 MHz).
    wire 	    sys_clk;
+	//% Phase shifted system clock divided by 8.
+	wire		 sys_clk_div8_ps;
+	//% Phase shift clock.
+	wire		 ps_clk;
+	//% Phase shift enable.
+	wire		 ps_en;
+	//% Phase shift incdec.
+	wire		 ps_incdec;
+	//% Phase shift done.
+	wire		 ps_done;
 	//% First clock of the 4 in an SST period.
 	wire		 sys_clk_div4_flag;
 	//% Overall phase (equiv. to PHAB in a LAB).
@@ -375,6 +387,7 @@ module SURF5(
 	wire readout_fifo_rst;
 	wire readout_rst;
 	wire [11:0] readout_fifo_empty;
+	wire [14:0] phase_scanner_dbg;
 	lab4d_controller u_controller( .clk_i(wbc_clk),.rst_i(wbc_rst),
 											 `WBS_CONNECT(l4_ctrl, wb),
 											 .sys_clk_i(sys_clk),
@@ -391,7 +404,15 @@ module SURF5(
 											 .complete_i(readout_complete_sysclk),
 											 
 											 .montiming_i(montiming_reg),
+	
+											 .clk_ps_i(sys_clk_div8_ps),
+											 .ps_clk_o(ps_clk),
+											 .ps_en_o(ps_en),
+											 .ps_incdec_o(ps_incdec),
+											 .ps_done_i(ps_done),
+											 .sync_mon_io(MON3),
 											 
+											 .MONTIMING_B(MONTIMING_B),											 
 											 .SIN(SIN),
 											 .SCLK(SCLK),
 											 .PCLK(PCLK),
@@ -402,7 +423,10 @@ module SURF5(
 											 .SHOUT(SHOUT),
 											 .WR(WR),
 											 .debug_o(lab4_debug),
-											 .trigger_debug_o(trigger_debug));
+											 .debug2_o(lab4_debug2),
+											 .trigger_debug_o(trigger_debug),
+											 .phase_scanner_debug_o(phase_scanner_dbg)				 
+											 );
 										 
 	// LAB4 RAM and serial receiver.
 	// The serial receiver just streams out 128x12 bits and writes them into
@@ -443,7 +467,6 @@ module SURF5(
    // SURF5 ID and Control block. This allows for reading out device and firmware ID registers,
    // reprogramming the SPI flash, global ICE40 reset, LED control, and clock selection.
    // Also handles external trigger input/debounce.
-	wire [14:0] phase_scanner_dbg;
    surf5_id_ctrl #(.VERSION(VERSION)) u_surf5_id_ctrl(.clk_i(wbc_clk),.rst_i(wbc_rst),
 				 `WBS_CONNECT(s5_id_ctrl, wb),
 				 // Interrupts.
@@ -454,8 +477,12 @@ module SURF5(
 				 // System clock output.
 				 .sys_clk_o(sys_clk),
 				 .sys_clk_div4_flag_o(sys_clk_div4_flag),
+				 .sys_clk_div8_ps_o(sys_clk_div8_ps),
+				 .ps_clk_i(ps_clk),
+				 .ps_en_i(ps_en),
+				 .ps_incdec_i(ps_incdec),
+				 .ps_done_o(ps_done),
 				 .sync_o(sync),
-				 .sync_mon_io(MON3),
 				 .sync_reset_i(sync_reset),
 				 .wclk_o(wclk),
 				 // PPS generation, in both domains.
@@ -466,10 +493,6 @@ module SURF5(
 				 // Ext trig generation, in both domains.
 				 .ext_trig_o(global_ext_trig),
 				 .ext_trig_sysclk_o(global_ext_trig_sysclk),
-				 // Phase scanner debug
-				 .phase_scanner_dbg_o(phase_scanner_dbg),				 
-				 // Monitoring inputs.
-				 .MONTIMING_B(MONTIMING_B),
 				 // Ext trig port
 				 .EXT_TRIG(EXT_TRIG),
 				 // PPS port
@@ -506,7 +529,7 @@ module SURF5(
 							  .clk0_debug0_i(pci_debug),
 							  .clk0_debug1_i(lab4_debug),
 							  .clk0_debug2_i(wbc_debug),			// unused
-							  .clk0_debug3_i(lab4_i2c_debug),	// unused
+							  .clk0_debug3_i(lab4_debug2),	// unused
 							  .clk1_debug_i(sysclk_debug),		// unused
 							  .clk_big_debug_i(phase_scanner_dbg),
 							  .global_debug_o(global_debug));
