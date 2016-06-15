@@ -37,31 +37,27 @@ CONSTANT	command_FULL_WIDTH,	02
 CONSTANT	command_GET_VALUE,	03
 CONSTANT	command_FIND_EDGE,	04
 
+; Main loop!
+; This is just basically a big switch statement.
+; Note that all "_jp/_lp" labels are jump points,
+; not function call destinations. So no returns from them.
 reset:		load	step_0,	00
 		load	step_1,	00
 main:		input	s0,	command_port
 		compare	s0,	command_FREE_SCAN
-		jump	Z,	free_scan
+		jump	Z,	free_scan_command_jp
 		compare	s0,	command_FULL_WIDTH
-		jump	Z,	full_width_measure
+		jump	Z,	full_width_measure_command_jp
 		compare	s0,	command_GET_VALUE
-		jump	Z,	get_value
+		jump	Z,	get_value_command_jp
 		compare	s0,	command_FIND_EDGE
-		jump	Z,	find_edge_command
+		jump	Z,	find_edge_command_jp
 		jump	main
-
-latch:		load	s0,	do_latch
-		output	s0,	status_port
-latch_lp1:	input	s0,	status_port
-		test	s0,	latch_done_bit
-		jump	Z,	latch_lp1
-		return
-
 ; Finds an edge.
 ; Argument's low 13 bits indicate the starting point.
 ; Bits [19:16] indicate which input.
 ; Bit  [24]    indicates a rising (0) or falling (1) edge.
-find_edge_command:
+find_edge_command_jp:
 		input	s0,	argument_0
 		input	s1,	argument_1
 		input	s2,	argument_2
@@ -73,10 +69,88 @@ find_edge_command:
 		call	find_edge
 		output	s0,	result_0
 		output	s1,	result_1
+		jump	main
+; Return the value of an input at a step point.
+; Argument's low 13 bits is the step point.
+; Bits [19:16] indicate which input.
+get_value_command_jp:
+		input	s0,	argument_0
+		input	s1,	argument_1
+		input	s3,	argument_2
+		and	s3,	0F
+		add	s3,	mon_base
+		call 	go_to_step
+		call	latch
+		input	s2,	(s3)
+		output	s2,	result_0
+		jump	main
+; Measure the total width of a particular input.
+; Argument's low 4 bits determine which input.
+full_width_measure_command_jp:
+		input	s3,	argument_0
+		and	s3,	0F
+		add	s3,	mon_base
+		load	s4,	00
+		load	s5,	00
+		load	s0,	00
+		load	s1,	00
+		call	go_to_step
+full_width_measure_lp1:
+		call	latch
+		input	s2,	(s3)
+		add	s4,	s2
+		addcy	s5,	00
+		call	step_increment
+		compare		step_0,	00
+		comparecy	step_1, 00
+		jump	NZ,	full_width_measure_lp1
+		output	s4,	result_0
+		output	s5,	result_1
+		load	s0,	command_IDLE
+		output	s0,	command_port
+		jump	main
+; Free scan. Just increment through all steps.
+free_scan_command_jp:
+		load	s0,	00
+		load	s1,	00
+		call	go_to_step
+free_scan_lp1:
+		call	latch
+		load	s0,	valid
+		output	s0,	status_port
+		call	step_increment
+		compare		step_0,	00
+		comparecy	step_1,	00
+		jump	NZ, free_scan_lp1
+		load	s0,	done
+		output	s0,	status_port
+		jump	main
+
+;
+; Functions.
+; 
+; Everything below here is a proper function (e.g. it returns).
+
+
+
+; latch: Issues phase scan latch and waits for acknowledge.
+; Register inputs: none
+; Registers used: s8
+latch:		load	s8,	do_latch
+		output	s8,	status_port
+latch_lp1:	input	s8,	status_port
+		test	s8,	latch_done_bit
+		jump	Z,	latch_lp1
 		return
-; Find edge. s0 contains the input, and s1
+
+
+; find_edge: Finds an edge in an input.
+; Register inputs: s0, s1.
+; s0 contains the input, and s1
 ; contains positive/negative edge.
-; Edge has to be stable for 4 steps.
+; Register outputs: s0, s1.
+; (s1,s0) contains the edge found.
+; Registers used: s0,s1,s2,s3,s8
 find_edge:
 		add	s0,	mon_base
 		load	s3,	00
@@ -108,75 +182,25 @@ find_edge_jp1:	call  	step_increment
 ; No target. Reset s3 (step counter) and continue.
 find_edge_jp2:	load	s3,	00		
 		jump	find_edge_jp1
-		
-; Return the value of an input at a step point.
-; Argument's low 13 bits is the step point.
-; Bits [19:16] indicate which input.
-get_value:
-		input	s0,	argument_0
-		input	s1,	argument_1
-		input	s3,	argument_2
-		and	s3,	0F
-		add	s3,	mon_base
-		call 	go_to_step
-		call	latch
-		input	s2,	(s3)
-		output	s2,	result_0
-		return
-		
-; Measure the total width of a particular input.
-; Argument's low 4 bits determine which input.
-full_width_measure:
-		input	s3,	argument_0
-		and	s3,	0F
-		add	s3,	mon_base
-		load	s4,	00
-		load	s5,	00
-		load	s0,	00
-		load	s1,	00
-		call	go_to_step
-full_width_measure_lp1:
-		call	latch
-		input	s2,	(s3)
-		add	s4,	s2
-		addcy	s5,	00
-		call	step_increment
-		compare		step_0,	00
-		comparecy	step_1, 00
-		jump	NZ,	full_width_measure_lp1
-		output	s4,	result_0
-		output	s5,	result_1
-		load	s0,	command_IDLE
-		output	s0,	command_port
-		return
-
-free_scan:	load	s0,	00
-		load	s1,	00
-		call	go_to_step
-free_scan_lp1:
-		call	latch
-		load	s0,	valid
-		output	s0,	status_port
-		call	step_increment
-		compare		step_0,	00
-		comparecy	step_1,	00
-		jump	NZ, free_scan_lp1
-		load	s0,	done
-		output	s0,	status_port
-		return	
-
-; this is crude and slow, but whatever
+				
+; go_to_step: Goes to a phase step specified.
+; Register inputs: (s1,s0) specify the destination step.
+; Registers used: s8
 go_to_step:	compare s0,	step_0
 		comparecy s1,	step_1
 		return 	Z
 		call	step_increment
 		jump	go_to_step
 
+; poll_done: Waits until phase increment/decrement is done.
+; Registers used: s8
 poll_done:	input	s8,	status_port
 		test	s8,	ps_done_bit
 		jump	Z,	poll_done
 		return
 
+; step_increment: Increments the phase a step.
+; Registers used: s8
 step_increment:	load	s8,	phase_inc
 		output 	s8,	status_port
 		call	poll_done
@@ -188,7 +212,9 @@ step_increment:	load	s8,	phase_inc
 		load	step_0,	00
 		load	step_1,	00
 		return
-		
+
+; step_decrement: Decrements the phase a step.
+; Registers used: s8
 step_decrement:	load	s8,	phase_dec
 		output	s8,	status_port
 		call	poll_done
