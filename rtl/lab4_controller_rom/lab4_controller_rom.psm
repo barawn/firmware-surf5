@@ -66,7 +66,9 @@ readout:
 	output	s0,	trigger_0
 	; Now fetch the data.
 	input	s0,	trigger_0
-	and	s0,	18
+	; The bank address comes only from bits 3:2.
+	and	s0,	0C
+	; First window to convert is window 0.
 	load	sF,	s0
 readout_begin:
 	input	s0,	serial_3
@@ -94,17 +96,25 @@ readout_lp1:
 	output	sA,	serial_2
 	output	sB,	serial_3
 	; prep the next request, which sets the read address
+	;
+	; The read address gets loaded into bits 11:7.
+	; We have them in bits 4:0.
+	; So we shift them up by 8 by using s9 as an MSB
+	; of a 16-bit pair (s9,s8)
+	; Then we shift that 16-bit object down 1
+	; to get a total shift of 7.
+
+	; Readout address is 16, which will be 010. So top byte is 01.
 	load    sA,     readout_load_addr_2
 	; Fetch the current block.
 	load	s9,	sF
 	; Pick off only the bottom 5 bits.
 	and     s9,	1F
-	; Initialize the bottom byte to 0
+	; Initialize the bottom byte to 0. Our pair is now (s9,s8)
 	load	s8,	00
-	; Shift the 5 bits of the address right by 1.
+	; Shift the 16-bit object down by 1, and feed in '0'.
 	sr0	s9
-	; And shift the LSB into the least significant byte. (bits 7:11)
-	sra	s8	
+	sra	s8
 readout_lp2:
 	input	s0,	serial_3
 	test	s0,	serial_busy_bit
@@ -143,11 +153,32 @@ readout_lp6:
 	input	s0,	readout_0
 	test	s0,	readout_busy_bit
 	jump	NZ,	readout_lp6
+	; Copy our window...
 	load	s0,	sF
-	and	s0,	07
-	compare	s0,	07
+	; 
+	; The window sequence goes
+	; 0xx00
+	; 1xx00
+	; 0xx01
+	; 1xx01
+	; 0xx10
+	; 1xx10
+	; 0xx11
+	; 1xx11
+	; 
+	; Check to see if we're done (window 7 has bits 4,0,1 set).
+	and	s0,	13
+	compare	s0,	13
 	jump	Z,	readout_complete
+	; We're not done. Toggle bit 4.
+	xor	sF, 	10
+	; Is bit 4 set now?
+	test	sF,	10
+	; If so, begin readout.
+	jump	NZ,	readout_begin
+	; Otherwise, increment to the next window pair.
 	add	sF,	01
+	; And begin readout again.
 	jump	readout_begin
 readout_complete:
 	return

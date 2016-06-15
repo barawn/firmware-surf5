@@ -96,7 +96,7 @@ module lab4d_trigger_control(
 		else if (post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i) triggering <= 0;
 
 		// Capture the trigger address when a trigger happens.
-		if (trigger_i || force_trigger_sysclk) trigger_address <= {bank, window};
+		if (trigger_i || force_trigger_sysclk) trigger_address <= {window[0],bank,window[2:1]};
 
 		// Move to next buffer when we hit post trigger limit.
 		if (triggering && post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i) bank <= bank + 1;
@@ -125,13 +125,26 @@ module lab4d_trigger_control(
 
 	assign enable_next_bank = (triggering && post_trigger_counter == post_trigger_limit);
 	assign enable_next_window = (sys_clk_div4_flag_i);
-	
+
+	// The WR[4:0] map here is to accomodate LAB4 weirdnesss.
+	// WR[4] has to toggle every SST, so that makes *it* the LSB.
+	// In the PicoBlaze code, what we have to do is mask off
+	// 10 011 = 13 (e.g. address = address  0x13)
+	// and then do
+	// convert address
+	// convert address | 0x10
+	// convert address+1
+	// convert address+1 | 0x10
+	// convert address+2
+	// convert address+2 | 0x10
+	// convert address+3
+	// convert address+3 | 0x10
 	generate
 		genvar i,j;
 		for (i=0;i<12;i=i+1) begin : LAB
 			(* IOB = "TRUE" *)
-			FDRE u_wr4(.D(bank_plus_one[0]),
-						  .CE(enable_next_bank),
+			FDRE u_wr4(.D(window_plus_one[0]),
+						  .CE(enable_next_window),
 						  .C(sys_clk_i),
 						  .R(!enabled_sysclk),
 						  .Q(WR[5*i+4]));
@@ -140,17 +153,24 @@ module lab4d_trigger_control(
 						  .C(sys_clk_i),
 						  .R(!enabled_sysclk),
 						  .Q(WR[5*i+3]));
-			for (j=0;j<3;j=j+1) begin : BIT
-				(* IOB = "TRUE" *)
-				FDRE u_wr(.D(window_plus_one[j]),
-							 .CE(enable_next_window),
-							 .C(sys_clk_i),
-							 .R(!enabled_sysclk),
-							 .Q(WR[5*i+j]));
-			end
+			FDRE u_wr2(.D(bank_plus_one[0]),
+						  .CE(enable_next_bank),
+						  .C(sys_clk_i),
+						  .R(!enabled_sysclk),
+						  .Q(WR[5*i+2]));
+			FDRE u_wr1(.D(window_plus_one[2]),
+						  .CE(enable_next_window),
+						  .C(sys_clk_i),
+						  .R(!enabled_sysclk),
+						  .Q(WR[5*i+1]));
+			FDRE u_wr0(.D(window_plus_one[1]),
+						  .CE(enable_next_window),
+						  .C(sys_clk_i),
+						  .R(!enabled_sysclk),
+						  .Q(WR[5*i+0]));
 		end
 	endgenerate
-	assign trigger_debug_o[5:0] = {bank,window};
+	assign trigger_debug_o[5:0] = {window[0],bank,window[2:1]};
 	assign trigger_debug_o[6] = trigger_i;
 	assign trigger_debug_o[7] = force_trigger_sysclk;
 	assign trigger_debug_o[8] = trigger_write;
