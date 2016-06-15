@@ -469,6 +469,7 @@ module lab4d_controller(
 														.ps_incdec_o(ps_incdec_o),
 														.ps_done_i(ps_done_i),
 														.MONTIMING_B(MONTIMING_B),
+														.sync_i(sync_i),
 														.sync_mon_io(sync_mon_io),
 														.debug_o(phase_scanner_debug_o),
 														.debug2_o(debug2_o));

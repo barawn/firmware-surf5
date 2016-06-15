@@ -10,6 +10,7 @@ module surf5_phase_scanner_v2(
 		output ps_incdec_o,
 		input ps_done_i,
 		input [11:0] MONTIMING_B,
+		input	sync_i,
 		inout sync_mon_io,
 		output [14:0] debug_o,
 		output [70:0] debug2_o
@@ -25,6 +26,11 @@ module surf5_phase_scanner_v2(
 	wire sync_q_clkps;
 	reg [11:0] montiming_q_clk = {12{1'b0}};
 	reg sync_q_clk = 0;
+
+	wire sync_mon_o = sync_i;
+	wire sync_mon_i = sync_mon_io;
+	reg sync_mon_disable = 0;
+	assign sync_mon_io = (sync_mon_disable) ? 1'bZ : sync_mon_o;
 
 	reg scan_valid = 0;
 	reg scan_done = 0;
@@ -137,6 +143,10 @@ module surf5_phase_scanner_v2(
 	assign ps_incdec_o = (pb_port[4:0] == 0) && pb_write && pb_outport[2];
 
 	always @(posedge clk_i) begin
+		if (pb_port[4:0] == 0 && pb_write) begin
+			sync_mon_disable <= pb_outport[5];
+		end
+
 		if (do_ce_clk) latched_clk_seen <= 0;
 		else if (done_ce_clk) latched_clk_seen <= 1; 
 
