@@ -26,6 +26,7 @@ module lab4d_ram(
 		input sys_clk_i,
 		// Readout controls, from the LAB4 controller.
 		input readout_i,
+		input [3:0] readout_header_i,
 		input readout_rst_i,
 		input readout_fifo_rst_i,
 		output [11:0] readout_fifo_empty_o,
@@ -69,17 +70,19 @@ module lab4d_ram(
 	localparam FSM_BITS=2;
 	localparam [FSM_BITS-1:0] IDLE = 0;
 	localparam [FSM_BITS-1:0] READ = 1;
-	localparam [FSM_BITS-1:0] ACK = 2;
+	localparam [FSM_BITS-1:0] WTF = 2;
+	localparam [FSM_BITS-1:0] ACK = 3;
 	reg [FSM_BITS-1:0] state = IDLE;
 	always @(posedge clk_i) begin
 		case (state)
 			IDLE: if (wb_cyc_i && wb_stb_i && !wb_we_i) state <= READ;	// read is 1 here
-			READ: state <= ACK;														// data is at output here
+			READ: state <= WTF;														// data is at output here
+			WTF: state <= ACK;														// why is this here?!?!?
 			ACK: state <= IDLE;														// data is at register here
 		endcase
 	end
 
-	wire fifo_read = (wb_cyc_i && wb_stb_i) && (state == IDLE);
+	wire fifo_read = (wb_cyc_i && wb_stb_i && !wb_we_i) && (state == IDLE);
 	assign wb_ack_o = (state == ACK);
 	
 	assign data_out[12] = data_out[4];
@@ -93,7 +96,7 @@ module lab4d_ram(
 			// Each LAB gets 512 entries of space, or 2048 bytes: so e.g. from 0000-07FF.
 			// So the lab selection picks off bits [14:11].
 			assign lab_read[i] = fifo_read && (wb_adr_i[14:11] == i);
-			lab4d_fifo u_fifo(.wr_clk(sys_clk_i),.wr_en(data_wr),.din({{4{1'b0}},data[12*i +: 12]}),
+			lab4d_fifo u_fifo(.wr_clk(sys_clk_i),.wr_en(data_wr),.din({readout_header_i,data[12*i +: 12]}),
 									.rst(readout_fifo_rst_i),.empty(readout_fifo_empty_o[i]),
 									.rd_clk(clk_i),.rd_en(lab_read[i]),.dout(data_out[i]));
 		end

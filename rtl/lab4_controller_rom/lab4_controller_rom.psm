@@ -11,6 +11,7 @@ CONSTANT	serial_2,     12
 CONSTANT	serial_3,     13
 CONSTANT	ramp_0,	      17
 CONSTANT	trigger_0,    14
+CONSTANT        header_0,     15
 CONSTANT	readout_0,    16
 
 CONSTANT	runmode_request_bit,	02
@@ -45,6 +46,7 @@ CONSTANT	trigger_start_bit,		01
 CONSTANT	trigger_stop_bit,		02
 CONSTANT	trigger_empty_bit,		80
 CONSTANT	trigger_read_bit,		40
+CONSTANT	trigger_reset_bit,		20
 
 reset:
 main:
@@ -66,10 +68,19 @@ readout:
 	output	s0,	trigger_0
 	; Now fetch the data.
 	input	s0,	trigger_0
+	and	s0,	1F
+	load	s7,	s0
 	; The bank address comes only from bits 3:2.
 	and	s0,	0C
+	load	s6,	s0
 	; First window to convert is window 0.
 	load	sF,	s0
+	;
+	; In This Loop:
+	; sF is current window.
+	; s8/s9/sA/sB are 32-bit input/outputs.
+	; s7 contains the raw address we read out.
+	;
 readout_begin:
 	input	s0,	serial_3
 	test	s0,	serial_busy_bit
@@ -147,6 +158,14 @@ readout_lp5:
 	input	s0,	serial_3
 	test	s0,	serial_busy_bit
 	jump	NZ,	readout_lp5
+	; Prep the headers.
+	load    s0,	s6
+	; Is this the trigger window?
+	compare	s7,	sF
+	jump	NZ,	readout_jp1
+	or	s0,	02
+readout_jp1:
+	output	s0,	header_0
 	load	s0,	do_readout
 	output	s0,	readout_0
 readout_lp6:
@@ -185,6 +204,9 @@ readout_complete:
 
 
 runmode_request:
+	; Reset. This clears the trigger FIFO.
+	load	s0,	trigger_reset_bit
+	output	s0,	trigger_0
 	; issue start_i
 	load	s0,	trigger_start_bit
 	output	s0,	trigger_0

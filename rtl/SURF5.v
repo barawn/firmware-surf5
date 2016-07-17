@@ -116,6 +116,7 @@ module SURF5(
 		inout [3:0]		RFP_SDA,
 		// SPI.
 		output			SPI_CS_neg,
+		output			SPI_CS_neg_alt,
 		output			SPI_D0_MOSI,
 		input 			SPI_D1_MISO,
 		output			SPI_D2,
@@ -124,10 +125,10 @@ module SURF5(
    
 	localparam [3:0] BOARDREV = 4'h1;
 	localparam [3:0] MONTH = 6;
-	localparam [7:0] DAY = 10;
+	localparam [7:0] DAY = 27;
 	localparam [3:0] MAJOR = 0;
 	localparam [3:0] MINOR = 2;
-	localparam [7:0] REVISION = 7;
+	localparam [7:0] REVISION = 11;
 	localparam [31:0] VERSION = {BOARDREV, MONTH, DAY, MAJOR, MINOR, REVISION };
 	
 	wire [7:0] TD = {8{1'b0}};
@@ -380,7 +381,7 @@ module SURF5(
 	// LAB4 controller.
 	// Handles buffer switching, serial control, and readout initialization.
 	wire readout_begin_sysclk;
-	wire [4:0] readout_address_sysclk;
+	wire [3:0] readout_header_sysclk;
 	wire [3:0] readout_prescale_sysclk;
 	wire readout_complete_sysclk;
 	wire [15:0] trigger_debug;
@@ -399,7 +400,7 @@ module SURF5(
 											 .readout_fifo_rst_o(readout_fifo_rst),
 											 .readout_fifo_empty_i(readout_fifo_empty),
 											 .readout_rst_o(readout_rst),
-											 .readout_address_o(readout_address_sysclk),
+											 .readout_header_o(readout_header_sysclk),
 											 .prescale_o(readout_prescale_sysclk),
 											 .complete_i(readout_complete_sysclk),
 											 
@@ -436,6 +437,7 @@ module SURF5(
 						  `WBS_CONNECT(l4_ram, wb),
 						  .sys_clk_i(sys_clk),
 						  .readout_i(readout_begin_sysclk),
+						  .readout_header_i(readout_header_sysclk),
 						  // FIX THIS
 						  .readout_rst_i(readout_rst),
 						  .readout_fifo_rst_i(readout_fifo_rst),
@@ -501,6 +503,7 @@ module SURF5(
 				 .MOSI(SPI_D0_MOSI),
 				 .MISO(SPI_D1_MISO),
 				 .CS_B(SPI_CS_neg),
+				 .CS_B_alt(SPI_CS_neg_alt),
 				 // LED ports
 				 .LED(LED),
 				 .FP_LED(FP_LED),
@@ -549,5 +552,4 @@ module SURF5(
 	
 	ODDR local_clk_ddr(.D1(1'b0),.D2(1'b1),.C(local_clk_int),.CE(1'b1),.S(1'b0),.R(1'b0),.Q(MON1));
 	assign MON2 = internal_sst_copy;
-	
 endmodule

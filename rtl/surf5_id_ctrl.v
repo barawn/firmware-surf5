@@ -34,7 +34,8 @@
 // 0x001C: Clock selection register (FPGA_SST_SEL, LOCAL_OSC_EN, and clock detection).
 // 0x0020: MMCM/PLL control register for internal SST generation.
 // 0x0024: SPI core slave select output register.
-// 0x0028-2C: Reserved.
+// 0x0028: Phase select register.
+// 0x002C: Device DNA port.
 // 0x0030-0x003F: Simple SPI core.
 // 0x0200-0x03FF: Dynamic Reconfiguration Port for internal SST generation.
 //                Mainly reserved, maybe we'll add it at some point.
@@ -82,6 +83,7 @@ module surf5_id_ctrl(
 		output MOSI,
 		input MISO,
 		output CS_B,
+		output CS_B_alt,
 
 		inout [3:0] LED,
 		output FP_LED,
@@ -326,6 +328,7 @@ module surf5_id_ctrl(
 		assign FPGA_SST_SEL = (clocksel_reg[1]) ? clocksel_reg[0] : 1'bZ;
 		assign LOCAL_OSC_EN = clocksel_reg[2];
 		assign CS_B = !spiss_reg[0];		
+		assign CS_B_alt = !spiss_reg[0];
 
 		assign LED[0] = (led_oen[0]) ? 1'bZ : led_out[0];
 		assign LED[1] = (led_oen[1]) ? 1'bZ : led_out[1];
@@ -350,8 +353,8 @@ module surf5_id_ctrl(
 		// CLKIN_PERIOD: Input clock period in ns to ps resolution (i.e. 33.333 is 30 MHz).
 		.CLKIN1_PERIOD(40.0),
 		.CLKIN2_PERIOD(40.0),
-		.CLKOUT0_DIVIDE_F(10.0), // SYSCLK (100 MHz)
-		.CLKOUT1_DIVIDE(5.0),	 // WCLK (200 MHz)
+		.CLKOUT0_DIVIDE_F(5.0), // WCLK (400 MHz)
+		.CLKOUT1_DIVIDE(10.0),	 // SYSCLK (100 MHz)
 		.CLKOUT2_DIVIDE(40.0),	 // SYSCLK_DIV4 (25 MHz)
 		.CLKOUT3_DIVIDE(80.0),	 // SYSCLK_DIV8_PS (12.5 MHz)
 		.CLKOUT3_USE_FINE_PS("TRUE"),
@@ -364,8 +367,8 @@ module surf5_id_ctrl(
 		.REF_JITTER2(0.0),
 		.STARTUP_WAIT("FALSE")) u_mmcm(	.CLKIN1(FPGA_TURF_SST),
 													.CLKIN2(LOCAL_CLK),
-													.CLKOUT0(sys_clk_mmcm),
-													.CLKOUT1(wclk_mmcm),
+													.CLKOUT0(wclk_mmcm),
+													.CLKOUT1(sys_clk_mmcm),
 													.CLKOUT2(sys_clk_div4_mmcm),
 													.CLKOUT3(sys_clk_div8_ps_mmcm),
 													.PSCLK(ps_clk_i),

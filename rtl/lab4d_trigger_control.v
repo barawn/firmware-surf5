@@ -95,14 +95,15 @@ module lab4d_trigger_control(
 		if (trigger_i || force_trigger_sysclk) triggering <= 1;
 		else if (post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i) triggering <= 0;
 
-		// Capture the trigger address when a trigger happens.
-		if (trigger_i || force_trigger_sysclk) trigger_address <= {window[0],bank,window[2:1]};
+		// Capture address when we transition. Trigger address indicates LAST window.
+		if (triggering && post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i) 
+			trigger_address <= {window[0],bank,window[2:1]};
 
 		// Move to next buffer when we hit post trigger limit.
 		if (triggering && post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i) bank <= bank + 1;
-		else if (rst_i) bank <= {2{1'b0}};
+		else if (!enabled_sysclk) bank <= {2{1'b0}};
 		
-		// Write the trigger into the FIFO when we hit the post trigger limit.
+		// Write the trigger into the FIFO when we hit the post trigger limit. trigger_write=1 and trigger_address latch happen at same time.
 		if (triggering && post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i) trigger_write <= 1;
 		else trigger_write <= 0;
 

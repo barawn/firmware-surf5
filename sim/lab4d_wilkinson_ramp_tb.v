@@ -27,11 +27,12 @@ module lab4d_wilkinson_ramp_tb;
 	// Inputs
 	reg clk_i;
 	reg wclk_i;
+	reg sysclk_i;
 	reg update_i;
 	reg [15:0] ramp_to_wclk_i;
 	reg [15:0] wclk_stop_count_i;
 	reg do_ramp_i;
-
+	reg rst_i;
 	// Outputs
 	wire ramp_done_o;
 	wire [11:0] RAMP;
@@ -39,9 +40,11 @@ module lab4d_wilkinson_ramp_tb;
 	wire [11:0] WCLK_N;
 
 	// Instantiate the Unit Under Test (UUT)
-	lab4d_wilkinson_ramp uut (
+	lab4d_wilkinson_ramp_v2 uut (
 		.clk_i(clk_i), 
 		.wclk_i(wclk_i), 
+		.sys_clk_i(sysclk_i),
+		.rst_i(rst_i),
 		.update_i(update_i), 
 		.ramp_to_wclk_i(ramp_to_wclk_i), 
 		.wclk_stop_count_i(wclk_stop_count_i), 
@@ -56,13 +59,18 @@ module lab4d_wilkinson_ramp_tb;
 		#15 clk_i = ~clk_i;
 	end
 	always begin
-		#2.5 wclk_i = ~wclk_i;
+		#1.25 wclk_i = ~wclk_i;
+		#1.25 wclk_i = ~wclk_i;
+		#1.25 wclk_i = ~wclk_i;
+		#1.25 wclk_i = ~wclk_i;
+		sysclk_i = ~sysclk_i;		
 	end
-	
 	initial begin
 		// Initialize Inputs
 		clk_i = 0;
 		wclk_i = 0;
+		sysclk_i = 0;
+		rst_i = 0;
 		update_i = 0;
 		ramp_to_wclk_i = 0;
 		wclk_stop_count_i = 0;
@@ -71,12 +79,10 @@ module lab4d_wilkinson_ramp_tb;
 		// Wait 100 ns for global reset to finish
 		#100;
       @(posedge clk_i);
-		// Add stimulus here
-		wclk_stop_count_i = 2047;
-		update_i = 1;
+		rst_i = 1;
 		@(posedge clk_i);
-		update_i = 0;
-		@(posedge clk_i);
+		rst_i = 0;
+		#100;
 		@(posedge clk_i);
 		do_ramp_i = 1;
 		@(posedge clk_i);

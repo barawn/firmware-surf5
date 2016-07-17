@@ -30,7 +30,7 @@ module lab4d_controller(
 		inout  sync_mon_io,
 		
 		output readout_o,
-		output [5:0] readout_address_o,
+		output [3:0] readout_header_o,
 		output readout_fifo_rst_o,
 		output readout_rst_o,
 		input [11:0] readout_fifo_empty_i,
@@ -57,7 +57,7 @@ module lab4d_controller(
 	localparam [3:0] READOUT_PRESCALE_DEFAULT = 4'h0;
 	localparam [7:0] SHIFT_PRESCALE_DEFAULT = 8'h00;
 	localparam [15:0] RAMP_TO_WILKINSON_DEFAULT = 16'h0000;
-	localparam [15:0] WCLK_STOP_COUNT_DEFAULT = 16'd4096;
+	localparam [15:0] WCLK_STOP_COUNT_DEFAULT = 16'd1024;
 
 	// registers:
 	// 0: resets/control/runmode
@@ -143,9 +143,19 @@ module lab4d_controller(
 
    reg ack = 0;
 
+	// lab4 register:
+	// bit 0 : reset request
+	// bit 1: runmode request
+	// bit 2: runmode
+	// bit 3: running
+	// bit 7:4:  unused
+	// bit 8: wilk reset
+	// bit 15:9 unused
+	// bit 27:16: regclear
 	reg lab4_control_reset_request = 0;
 	reg lab4_runmode_request = 0;
 	reg lab4_runmode = 0;
+	reg lab4_wilk_reset = 0;
 	reg [11:0] lab4_regclear = {12{1'b0}};
 	wire lab4_running;
 	assign lab4_control_register = {{4{1'b0}},lab4_regclear,{12{1'b0}},lab4_running,lab4_runmode,lab4_runmode_request,lab4_control_reset_request};
@@ -218,7 +228,13 @@ module lab4d_controller(
 	reg readout_fifo_reset = 0;
 	reg readout_reset = 0;
 	wire data_available = (readout_fifo_empty_i != {12{1'b1}});
-	assign readout_register = {{4{1'b0}},readout_fifo_empty_i,{8{1'b0}},readout_pending,{2{1'b0}},readout_data_not_test_pattern,1'b0,data_available,1'b0,readout_done};
+	assign readout_register = {{4{1'b0}},readout_fifo_empty_i,{8{1'b0}},readout_pending,{2{1'b0}},readout_data_not_test_pattern,data_available,2'b00,readout_done};
+	
+	reg [3:0] readout_header_clk = {4{1'b0}};
+	reg [3:0] readout_header_sysclk = {4{1'b0}};
+	wire readout_header_write_sysclk;
+	reg readout_header_write = 0;
+	flag_sync u_readout_header(.in_clkA(readout_header_write),.clkA(clk_i),.out_clkB(readout_header_write_sysclk),.clkB(sys_clk_i));
 	
 	//% Holds PicoBlaze in reset.
 	reg processor_reset = 0;
@@ -291,7 +307,7 @@ module lab4d_controller(
 	assign pb_inport[18] = lab4_serial_register[23:16];
 	assign pb_inport[19] = {lab4_serial_busy,3'b000,lab4_serial_select};
 	assign pb_inport[20] = trigger_register[7:0];
-	assign pb_inport[21] = {8{1'b0}};
+	assign pb_inport[21] = {{4{1'b0}},readout_header_clk};
 	assign pb_inport[22] = readout_register[7:0];
 	assign pb_inport[23] = {ramp_pending,{7{1'b0}}};
 	assign pb_inport[24] = pb_inport[16];
@@ -333,8 +349,13 @@ module lab4d_controller(
 			readout_reset <= 0;
 		end
 		
-		
-		
+		if (pb_port[4:0] == 21 && pb_write) begin
+			readout_header_write <= 1;
+			readout_header_clk <= pb_outport[3:0];
+		end else begin
+			readout_header_write <= 0;
+		end
+				
 		if (pb_port[4:0] == 19 && pb_write) begin
 			lab4_serial_select <= pb_outport[3:0];
 		end
@@ -357,6 +378,9 @@ module lab4d_controller(
 		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:0] == 7'h00)) begin
 			lab4_runmode_request <= wb_dat_i[1];
 			lab4_regclear <= wb_dat_i[16 +: 12];
+			lab4_wilk_reset <= wb_dat_i[8];
+		end else begin
+			lab4_wilk_reset <= 0;
 		end
 				
 		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:0] == 7'h18)) begin
@@ -374,12 +398,19 @@ module lab4d_controller(
 			update_wilkinson <= 1;
 			if (wb_adr_i[6:0] == 7'h0C) ramp_to_wilkinson <= wb_dat_i[15:0];
 			if (wb_adr_i[6:0] == 7'h10) wclk_stop_count <= wb_dat_i[15:0];
+		end else begin
+			update_wilkinson <= 0;
+		end
+
+		if (pb_port[4:0] == 20 && pb_write) begin
+			trigger_reset <= pb_outport[5];
+		end else begin
+			trigger_reset <= 0;
 		end
 
 		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:0] == 7'h54)) begin
 			trigger_clear <= wb_dat_i[0];
 			force_trigger <= wb_dat_i[1];
-			trigger_reset <= wb_dat_i[2];
 			if (wb_dat_i[31]) begin 
 				post_trigger_wr <= 1;
 				post_trigger <= wb_dat_i[18:16];
@@ -387,7 +418,6 @@ module lab4d_controller(
 		end else begin
 			trigger_clear <= 0;
 			force_trigger <= 0;
-			trigger_reset <= 0;
 			post_trigger_wr <= 0;
 		end
 
@@ -402,6 +432,10 @@ module lab4d_controller(
 
       ack <= wb_cyc_i && wb_sel_i;
 	end
+	always @(posedge sys_clk_i) begin
+		if (readout_header_write_sysclk) readout_header_sysclk <= readout_header_clk;
+	end
+
 	wire dbg_sin;
 	wire dbg_sclk;
 	wire dbg_pclk;
@@ -440,8 +474,10 @@ module lab4d_controller(
 											  
 											  .WR(WR));
 	wire dbg_ramp;
-	lab4d_wilkinson_ramp u_ramp(.clk_i(clk_i),
+	lab4d_wilkinson_ramp_v2 u_ramp(.clk_i(clk_i),
 										 .wclk_i(wclk_i),
+										 .sys_clk_i(sys_clk_i),
+										 .rst_i(lab4_wilk_reset),
 										 .update_i(update_wilkinson),
 										 .ramp_to_wclk_i(ramp_to_wilkinson),
 										 .wclk_stop_count_i(wclk_stop_count),
@@ -504,6 +540,7 @@ module lab4d_controller(
 	assign debug_o[47 +: 8] = pb_port;
 	assign debug_o[55] = dbg_ramp;
 
+	assign readout_header_o = readout_header_sysclk;
 	assign readout_fifo_rst_o = readout_fifo_reset;
 	flag_sync u_readout_rst(.in_clkA(readout_reset),.clkA(clk_i),.out_clkB(readout_rst_o),.clkB(sys_clk_i));
 	
