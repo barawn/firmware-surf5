@@ -128,7 +128,7 @@ module SURF5(
 	localparam [7:0] DAY = 27;
 	localparam [3:0] MAJOR = 0;
 	localparam [3:0] MINOR = 2;
-	localparam [7:0] REVISION = 11;
+	localparam [7:0] REVISION = 12;
 	localparam [31:0] VERSION = {BOARDREV, MONTH, DAY, MAJOR, MINOR, REVISION };
 	
 	wire [7:0] TD = {8{1'b0}};

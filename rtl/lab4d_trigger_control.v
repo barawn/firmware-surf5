@@ -124,7 +124,7 @@ module lab4d_trigger_control(
 							  .wr_en(trigger_write),.rd_en(trigger_rd_i),.empty(trigger_empty_o),
 							  .rst(rst_i));
 
-	assign enable_next_bank = (triggering && post_trigger_counter == post_trigger_limit);
+	assign enable_next_bank = (triggering && post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i);
 	assign enable_next_window = (sys_clk_div4_flag_i);
 
 	// The WR[4:0] map here is to accomodate LAB4 weirdnesss.
