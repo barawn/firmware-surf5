@@ -84,7 +84,7 @@ readout:
 readout_begin:
 	input	s0,	serial_3
 	test	s0,	serial_busy_bit
-	jump	NZ,	readout
+	jump	NZ,	readout_begin
 	load	s8,	readout_GCC_reset_0
 	load	s9,	readout_GCC_reset_1
 	load	sA,	readout_GCC_reset_2
