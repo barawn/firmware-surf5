@@ -124,11 +124,11 @@ module SURF5(
 	 );
    
 	localparam [3:0] BOARDREV = 4'h1;
-	localparam [3:0] MONTH = 6;
-	localparam [7:0] DAY = 27;
+	localparam [3:0] MONTH = 8;
+	localparam [7:0] DAY = 28;
 	localparam [3:0] MAJOR = 0;
-	localparam [3:0] MINOR = 2;
-	localparam [7:0] REVISION = 12;
+	localparam [3:0] MINOR = 5;
+	localparam [7:0] REVISION = 3;
 	localparam [31:0] VERSION = {BOARDREV, MONTH, DAY, MAJOR, MINOR, REVISION };
 	
 	wire [7:0] TD = {8{1'b0}};
@@ -248,6 +248,8 @@ module SURF5(
    `WB_DEFINE( turfc, 32, 20, 4);
 	// wbvio: VIO master port WISHBONE bus.
 	`WB_DEFINE(wbvio, 32, 20, 4);
+	// dmad: DMA master port WISHBONE bus.
+	`WB_DEFINE(dmad, 32, 20, 4);
 	/*
 	 * Slaves.
 	 */
@@ -262,13 +264,19 @@ module SURF5(
 	// Dummy slave 3.
 	`WB_DEFINE( rfp, 32, 16, 4);
 	  
+	 // DMA slave connect.
+	`WB_DEFINE( dmac, 32, 16, 4);
+	  
 	// WISHBONE data bus. These aren't merged anywhere yet. Still figuring out best methods.
 	// pcid: PCI data slave port WISHBONE bus.
 	`WB_DEFINE( pcid, 32, 32, 4);
+	wire [2:0] pcid_cti;
+	wire [1:0] pcid_bte;
+	
 	// turfd: TURF data slave port WISHBONE bus.
 	`WB_DEFINE( turfd, 32, 32, 4);
 	// Kill the PCID/TURFD busses. This just sets all the master signals to 0.
-	`WB_KILL( pcid , 32, 32, 4);
+	//`WB_KILL( pcid , 32, 32, 4);
 	`WB_KILL( turfd , 32, 32, 4);
 
 	`PCI_TRIS(pci_rst);
@@ -312,9 +320,9 @@ module SURF5(
 				.wb_int_i(pci_interrupt),
 
 				`WBM_CONNECT(pcic, wbm),
-				`WBS_CONNECT(pcid, wbs)
-//				.wbm_cti_o(wbm_cti),
-//				.wbm_bte_o(wbm_bte)
+				`WBS_CONNECT(pcid, wbs),
+				.wbs_cti_i(pcid_cti),
+				.wbs_bte_i(pcid_bte)
 				);
 
 	reg [31:0] pci_debug_data = {32{1'b0}};
@@ -372,10 +380,12 @@ module SURF5(
 				`WBS_CONNECT(turfc, turfc),
 				`WBS_CONNECT(hkmc, hkmc),
 				`WBS_CONNECT(wbvio, wbvio),
+				`WBS_CONNECT(dmad, dmad),
 				`WBM_CONNECT(s5_id_ctrl, s5_id_ctrl),
 				`WBM_CONNECT(l4_ctrl, l4_ctrl),
 				`WBM_CONNECT(l4_ram, l4_ram),
 				`WBM_CONNECT(rfp, rfp),
+				`WBM_CONNECT(dmac, dma),
 				.debug_o(wbc_debug));
 
 	// LAB4 controller.
@@ -389,6 +399,7 @@ module SURF5(
 	wire readout_rst;
 	wire [11:0] readout_fifo_empty;
 	wire [14:0] phase_scanner_dbg;
+	wire readout_test_pattern_enable;
 	lab4d_controller u_controller( .clk_i(wbc_clk),.rst_i(wbc_rst),
 											 `WBS_CONNECT(l4_ctrl, wb),
 											 .sys_clk_i(sys_clk),
@@ -401,6 +412,8 @@ module SURF5(
 											 .readout_fifo_empty_i(readout_fifo_empty),
 											 .readout_rst_o(readout_rst),
 											 .readout_header_o(readout_header_sysclk),
+											 .readout_test_pattern_o(readout_test_pattern_enable),
+											 
 											 .prescale_o(readout_prescale_sysclk),
 											 .complete_i(readout_complete_sysclk),
 											 
@@ -432,12 +445,21 @@ module SURF5(
 	// LAB4 RAM and serial receiver.
 	// The serial receiver just streams out 128x12 bits and writes them into
 	// block RAM connected to the WISHBONE bus.
+	//
+	// The block RAM is only accessible when a DMA transaction is not occuring, however.
+	// Otherwise it just returns zeros.
+	//
+	//
+	wire dma_ram_lock;
 	wire [31:0] readout_debug;
 	lab4d_ram u_ram( .clk_i(wbc_clk), .rst_i(wbc_rst),
 						  `WBS_CONNECT(l4_ram, wb),
+						  .dma_lock_i(dma_ram_lock),
+						  `WBS_CONNECT(l4_dma, wbdma),
 						  .sys_clk_i(sys_clk),
 						  .readout_i(readout_begin_sysclk),
 						  .readout_header_i(readout_header_sysclk),
+						  .readout_test_pattern_i(readout_test_pattern_enable),
 						  // FIX THIS
 						  .readout_rst_i(readout_rst),
 						  .readout_fifo_rst_i(readout_fifo_rst),
@@ -457,7 +479,18 @@ module SURF5(
 					  .RFP_DAC_SCL(RFP_DAC_SCL),
 					  .RFP_SDA(RFP_SDA),
 					  .RFP_SCL(RFP_SCL));
-						 											    
+
+	// DMA controller.
+	wire [70:0] dma_debug;
+	test_dma_controller u_dma_test( .clk_i(wbc_clk), .rst_i(wbc_rst),
+					  `WBS_CONNECT(dmac, wbs),
+					  `WBM_CONNECT(pcid, wbm),
+					  `WBM_CONNECT(dmad, dmad),
+					  .wbm_cti_o(pcid_cti),
+					  .wbm_bte_o(pcid_bte),
+					  .debug_o(dma_debug));
+					  
+
    // TURFbus. This is the data path back to the TURF.
    // This also needs a slave port definition for the data side bus.
    // Also needs the top-level port connections to the TURFbus.
@@ -512,7 +545,7 @@ module SURF5(
 				 .LOCAL_OSC_EN(local_osc_en_int),
 				 .FPGA_SST_SEL(FPGA_SST_SEL),
 				 .FPGA_SST(FPGA_SST),
-				 .FPGA_TURF_SST(FPGA_TURF_SST));
+				 .FPGA_TURF_SST(FPGA_TURF_SST));						  
 
 	wire [70:0] sysclk_debug;
 	always @(posedge sys_clk) begin
@@ -530,8 +563,8 @@ module SURF5(
 							  .clk_big_i(wbc_clk),
 							  `WBM_CONNECT(wbvio, wbvio),
 							  .clk0_debug0_i(pci_debug),
-							  .clk0_debug1_i(lab4_debug),
-							  .clk0_debug2_i(wbc_debug),			// unused
+							  .clk0_debug1_i(wbc_debug),
+							  .clk0_debug2_i(dma_debug),			// unused
 							  .clk0_debug3_i(lab4_debug2),	// unused
 							  .clk1_debug_i(sysclk_debug),		// unused
 							  .clk_big_debug_i(phase_scanner_dbg),

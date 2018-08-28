@@ -31,6 +31,7 @@ module lab4d_controller(
 		
 		output readout_o,
 		output [3:0] readout_header_o,
+		output readout_test_pattern_o,
 		output readout_fifo_rst_o,
 		output readout_rst_o,
 		input [11:0] readout_fifo_empty_i,
@@ -150,15 +151,17 @@ module lab4d_controller(
 	// bit 3: running
 	// bit 7:4:  unused
 	// bit 8: wilk reset
-	// bit 15:9 unused
+	// bit 14:9 unused
+	// bit 15: *readout* test pattern enable (not LAB4 test pattern enable! reads a counter into RAM. to test DMA)
 	// bit 27:16: regclear
 	reg lab4_control_reset_request = 0;
 	reg lab4_runmode_request = 0;
 	reg lab4_runmode = 0;
 	reg lab4_wilk_reset = 0;
 	reg [11:0] lab4_regclear = {12{1'b0}};
+	reg lab4_readout_test_pattern_enable = 0;
 	wire lab4_running;
-	assign lab4_control_register = {{4{1'b0}},lab4_regclear,{12{1'b0}},lab4_running,lab4_runmode,lab4_runmode_request,lab4_control_reset_request};
+	assign lab4_control_register = {{4{1'b0}},lab4_regclear,lab4_readout_test_pattern_enable,{11{1'b0}},lab4_running,lab4_runmode,lab4_runmode_request,lab4_control_reset_request};
 
 	reg [3:0] readout_prescale = READOUT_PRESCALE_DEFAULT;
 	assign readout_prescale_register = {{28{1'b0}},readout_prescale};
@@ -379,6 +382,7 @@ module lab4d_controller(
 			lab4_runmode_request <= wb_dat_i[1];
 			lab4_regclear <= wb_dat_i[16 +: 12];
 			lab4_wilk_reset <= wb_dat_i[8];
+			lab4_readout_test_pattern_enable <= wb_dat_i[15];
 		end else begin
 			lab4_wilk_reset <= 0;
 		end
@@ -542,6 +546,7 @@ module lab4d_controller(
 
 	assign readout_header_o = readout_header_sysclk;
 	assign readout_fifo_rst_o = readout_fifo_reset;
+	assign readout_test_pattern_o = lab4_readout_test_pattern_enable;
 	flag_sync u_readout_rst(.in_clkA(readout_reset),.clkA(clk_i),.out_clkB(readout_rst_o),.clkB(sys_clk_i));
 	
         assign wb_ack_o = ack;

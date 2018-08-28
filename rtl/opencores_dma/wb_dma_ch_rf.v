@@ -536,6 +536,7 @@ parameter	CH_NO = 0;
 parameter	HAVE_ARS = 1;
 parameter	HAVE_ED  = 1;
 parameter	HAVE_CBUF= 1;
+parameter TOT_SZ_MAX = 12;   
 
 input		clk, rst;
 

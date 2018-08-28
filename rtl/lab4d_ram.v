@@ -23,7 +23,12 @@ module lab4d_ram(
 		input clk_i,
 		input rst_i,
 		`WBS_NAMED_PORT(wb, 32, 16, 4),
+		input dma_lock_i,
+		output dma_locked_o,
+		`WBS_NAMED_PORT(wbdma, 32, 16, 4),
 		input sys_clk_i,
+		// Readout test pattern control
+		input readout_test_pattern_i,
 		// Readout controls, from the LAB4 controller.
 		input readout_i,
 		input [3:0] readout_header_i,
@@ -60,47 +65,120 @@ module lab4d_ram(
 			end
 		end
 	endgenerate
+		
+	reg use_dma_input = 0;
+	wire [31:0] local_dat_o;
+	wire local_cyc_i;
+	wire local_stb_i;
+	wire local_we_i;
+	wire local_ack_o;
+	wire [15:0] local_adr_i;
+	reg illegal_access_ack = 0;
+	
+	// Guard against changing DMA access during a control cycle.
+	// The reverse (changing DMA access during a DMA cycle) is guarded elsewhere
+	// because the DMA module handles lock/unlock.
+	always @(posedge clk_i) begin
+		if (dma_lock_i && !wb_cyc_i) use_dma_input <= 1;
+		else if (!dma_lock_i && !wb_cyc_i) use_dma_input <= 0;
+	end
 
+	assign local_cyc_i = (use_dma_input) ? wbdma_cyc_i : wb_cyc_i;
+	assign local_stb_i = (use_dma_input) ? wbdma_stb_i : wb_stb_i;
+	assign local_we_i = (use_dma_input) ? wbdma_we_i : wb_we_i;
+	assign local_adr_i = (use_dma_input) ? wbdma_adr_i : wb_adr_i;
+	// The only thing we need to override is the ack - the local bus
+	// will still get data, it'll just be nonsense.
+	assign wb_dat_o = local_dat_o;
+	assign wb_ack_o = (use_dma_input) ? illegal_access_ack : local_ack_o;
+
+	// just straight assign these, they're guarded by firmware
+	assign wbdma_dat_o = local_dat_o;
+	assign wbdma_ack_o = local_ack_o;
+	
 	wire data_wr;
 	wire [143:0] data;
 	wire [31:0] data_out[15:0];
 	wire [11:0] lab_read;
 
+	// We're now using a FWFT FIFO, with no embedded registers, but we register the data ourselves.
+	reg [31:0] data_out_registered = {32{1'b0}};
 
+	// So the state machine now goes IDLE -> ACK immediately, and then back to IDLE.
+	// (making it a bit of a pointless state machine).
+	// fifo_read gets asserted in IDLE, which means the data changes in ACK.
+	// If everything stays asserted, that means data_out_registered is actually valid immediately again.
+	// If we make burst reads work, need to figure out how that works
+	//          state   new_fifo_read  cti data_out data_out_registered
+	// clock 0: IDLE    1               0   D[0]     X
+	// clock 1: ACK     1               0   D[1]     D[0]
+	// clock 2: ACK     0               7   D[2]     D[1]
+	// so new_fifo_read would be (local_cyc_i && local_stb_i && !local_we_i) && ((state==IDLE) || (state==ACK && cti_i != 7))
+	// *should* work..... can probably simplify this to just && !(cti_i == 7 && local_ack_o)
+	
 	localparam FSM_BITS=2;
 	localparam [FSM_BITS-1:0] IDLE = 0;
 	localparam [FSM_BITS-1:0] READ = 1;
 	localparam [FSM_BITS-1:0] WTF = 2;
 	localparam [FSM_BITS-1:0] ACK = 3;
 	reg [FSM_BITS-1:0] state = IDLE;
-	always @(posedge clk_i) begin
+	always @(posedge clk_i) begin		
+		if (wb_cyc_i && wb_stb_i && use_dma_input && !illegal_access_ack) illegal_access_ack <= 1;
+		else illegal_access_ack <= 0;
+		
 		case (state)
-			IDLE: if (wb_cyc_i && wb_stb_i && !wb_we_i) state <= READ;	// read is 1 here
-			READ: state <= WTF;														// data is at output here
+			IDLE: if (local_cyc_i && local_stb_i && !local_we_i) state <= ACK;	// read is 1 here
+			READ: state <= ACK;														// data is at output here
 			WTF: state <= ACK;														// why is this here?!?!?
 			ACK: state <= IDLE;														// data is at register here
 		endcase
 	end
 
-	wire fifo_read = (wb_cyc_i && wb_stb_i && !wb_we_i) && (state == IDLE);
-	assign wb_ack_o = (state == ACK);
+	wire fifo_read = (local_cyc_i && local_stb_i && !local_we_i) && (state == IDLE);
+	assign local_ack_o = (state == ACK);
 	
 	assign data_out[12] = data_out[4];
 	assign data_out[13] = data_out[5];
 	assign data_out[14] = data_out[6];
 	assign data_out[15] = data_out[7];
-	assign wb_dat_o = data_out[wb_adr_i[14:11]];
+
+	always @(posedge clk_i) begin
+		data_out_registered <= data_out[local_adr_i[14:11]];
+	end
+	assign local_dat_o = data_out_registered;
+
+	reg [11:0] readout_test_pattern = {12{1'b0}};
+	reg data_wr_reg = 0;
+	always @(posedge sys_clk_i) begin
+		if (readout_i && readout_test_pattern_i) readout_test_pattern <= {12{1'b0}};
+		else if (readout_test_pattern_i && data_wr) readout_test_pattern <= readout_test_pattern + 1;
+
+		data_wr_reg <= data_wr;
+	end
+	
 	generate
 		genvar i;
 		for (i=0;i<12;i=i+1) begin : FIFOS
+			wire [15:0] data_input;
+			reg [15:0] data_in_reg = {16{1'b0}};
 			// Each LAB gets 512 entries of space, or 2048 bytes: so e.g. from 0000-07FF.
 			// So the lab selection picks off bits [14:11].
-			assign lab_read[i] = fifo_read && (wb_adr_i[14:11] == i);
-			lab4d_fifo u_fifo(.wr_clk(sys_clk_i),.wr_en(data_wr),.din({readout_header_i,data[12*i +: 12]}),
+			// It's a FIFO, not actually a RAM, because we don't have enough address space.
+			assign lab_read[i] = fifo_read && (local_adr_i[14:11] == i);
+			always @(posedge sys_clk_i) begin : DATA_INPUT_REGISTER
+				if (data_wr) begin
+					if (readout_test_pattern_i) data_in_reg <= {readout_header_i, readout_test_pattern};
+					else data_in_reg <= {readout_header_i, data[12*i +: 12]};
+				end
+			end
+			// Data write and data are delayed to let them come from registers.
+			lab4d_fifo u_fifo(.wr_clk(sys_clk_i),.wr_en(data_wr_reg),.din(data_in_reg),
 									.rst(readout_fifo_rst_i),.empty(readout_fifo_empty_o[i]),
 									.rd_clk(clk_i),.rd_en(lab_read[i]),.dout(data_out[i]));
 		end
 	endgenerate
+	
+	assign dma_locked_o = use_dma_input;
 	
 	wire dbg_ss_incr;
 	wire dbg_srclk;
