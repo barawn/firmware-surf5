@@ -43,9 +43,11 @@ module lab4d_fifo(
   din,
   wr_en,
   rd_en,
+  prog_empty_thresh,
   dout,
   full,
-  empty
+  empty,
+  prog_empty
 );
 
 input rst;
@@ -54,9 +56,11 @@ input rd_clk;
 input [15 : 0] din;
 input wr_en;
 input rd_en;
+input [9 : 0] prog_empty_thresh;
 output [31 : 0] dout;
 output full;
 output empty;
+output prog_empty;
 
 // synthesis translate_off
 
@@ -178,7 +182,7 @@ output empty;
     .C_PROG_EMPTY_THRESH_ASSERT_VAL_WDCH(1022),
     .C_PROG_EMPTY_THRESH_ASSERT_VAL_WRCH(1022),
     .C_PROG_EMPTY_THRESH_NEGATE_VAL(5),
-    .C_PROG_EMPTY_TYPE(0),
+    .C_PROG_EMPTY_TYPE(3),
     .C_PROG_EMPTY_TYPE_AXIS(0),
     .C_PROG_EMPTY_TYPE_RACH(0),
     .C_PROG_EMPTY_TYPE_RDCH(0),
@@ -258,16 +262,17 @@ output empty;
     .DIN(din),
     .WR_EN(wr_en),
     .RD_EN(rd_en),
+    .PROG_EMPTY_THRESH(prog_empty_thresh),
     .DOUT(dout),
     .FULL(full),
     .EMPTY(empty),
+    .PROG_EMPTY(prog_empty),
     .BACKUP(),
     .BACKUP_MARKER(),
     .CLK(),
     .SRST(),
     .WR_RST(),
     .RD_RST(),
-    .PROG_EMPTY_THRESH(),
     .PROG_EMPTY_THRESH_ASSERT(),
     .PROG_EMPTY_THRESH_NEGATE(),
     .PROG_FULL_THRESH(),
@@ -286,7 +291,6 @@ output empty;
     .RD_DATA_COUNT(),
     .WR_DATA_COUNT(),
     .PROG_FULL(),
-    .PROG_EMPTY(),
     .SBITERR(),
     .DBITERR(),
     .M_ACLK(),

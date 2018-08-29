@@ -34,6 +34,7 @@ module lab4d_ram(
 		input [3:0] readout_header_i,
 		input readout_rst_i,
 		input readout_fifo_rst_i,
+		input [9:0] readout_empty_size_i,
 		output [11:0] readout_fifo_empty_o,
 		input [15:0] prescale_i,
 		
@@ -104,6 +105,8 @@ module lab4d_ram(
 	// We're now using a FWFT FIFO, with no embedded registers, but we register the data ourselves.
 	reg [31:0] data_out_registered = {32{1'b0}};
 
+	reg [9:0] readout_empty_threshold = {10{1'b0}};
+
 	// So the state machine now goes IDLE -> ACK immediately, and then back to IDLE.
 	// (making it a bit of a pointless state machine).
 	// fifo_read gets asserted in IDLE, which means the data changes in ACK.
@@ -122,7 +125,10 @@ module lab4d_ram(
 	localparam [FSM_BITS-1:0] WTF = 2;
 	localparam [FSM_BITS-1:0] ACK = 3;
 	reg [FSM_BITS-1:0] state = IDLE;
-	always @(posedge clk_i) begin		
+	always @(posedge clk_i) begin
+		// buy time for the empty threshold
+		readout_empty_threshold <= readout_empty_size_i;
+	
 		if (wb_cyc_i && wb_stb_i && use_dma_input && !illegal_access_ack) illegal_access_ack <= 1;
 		else illegal_access_ack <= 0;
 		
@@ -173,7 +179,8 @@ module lab4d_ram(
 			end
 			// Data write and data are delayed to let them come from registers.
 			lab4d_fifo u_fifo(.wr_clk(sys_clk_i),.wr_en(data_wr_reg),.din(data_in_reg),
-									.rst(readout_fifo_rst_i),.empty(readout_fifo_empty_o[i]),
+									.rst(readout_fifo_rst_i),.prog_empty(readout_fifo_empty_o[i]),
+									.prog_empty_thresh(readout_empty_threshold),
 									.rd_clk(clk_i),.rd_en(lab_read[i]),.dout(data_out[i]));
 		end
 	endgenerate

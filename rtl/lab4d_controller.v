@@ -35,6 +35,7 @@ module lab4d_controller(
 		output readout_fifo_rst_o,
 		output readout_rst_o,
 		input [11:0] readout_fifo_empty_i,
+		output [9:0] readout_empty_size_o,
 		output [3:0] prescale_o,
 		input complete_i,
 		
@@ -84,6 +85,7 @@ module lab4d_controller(
 	// 20: last trigger buffer
 	// 21: trigger control
 	// 22: readout
+	// 23: readout empty threshold (event size - 1)
 	// 30: picoblaze control
 	// 31: picoblaze bram
 	
@@ -103,6 +105,8 @@ module lab4d_controller(
 	wire [31:0] readout_register;
 
 	wire [31:0] pb_bram_data;
+
+	reg [9:0] readout_empty_threshold = {10{1'b0}};
 
 
 	assign register_mux[0] = lab4_control_register;
@@ -128,7 +132,7 @@ module lab4d_controller(
 	assign register_mux[20] = {32{1'b0}};
 	assign register_mux[21] = trigger_register;
 	assign register_mux[22] = readout_register;
-	assign register_mux[23] = register_mux[3];
+	assign register_mux[23] = {{22{1'b0}},readout_empty_threshold};
 	assign register_mux[24] = phase_scanner_dat_o;
 	assign register_mux[25] = phase_scanner_dat_o;
 	assign register_mux[26] = phase_scanner_dat_o;
@@ -352,6 +356,10 @@ module lab4d_controller(
 			readout_reset <= 0;
 		end
 		
+		if (wb_cyc_i && wb_stb_i && wb_we_i && wb_adr_i[6:0] == 7'h5C) begin
+			readout_empty_threshold <= wb_dat_i[9:0];
+		end
+		
 		if (pb_port[4:0] == 21 && pb_write) begin
 			readout_header_write <= 1;
 			readout_header_clk <= pb_outport[3:0];
@@ -547,6 +555,8 @@ module lab4d_controller(
 	assign readout_header_o = readout_header_sysclk;
 	assign readout_fifo_rst_o = readout_fifo_reset;
 	assign readout_test_pattern_o = lab4_readout_test_pattern_enable;
+	assign readout_empty_size_o = readout_empty_threshold;
+	
 	flag_sync u_readout_rst(.in_clkA(readout_reset),.clkA(clk_i),.out_clkB(readout_rst_o),.clkB(sys_clk_i));
 	
         assign wb_ack_o = ack;

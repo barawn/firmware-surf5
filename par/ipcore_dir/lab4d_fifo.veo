@@ -64,9 +64,11 @@ lab4d_fifo your_instance_name (
   .din(din), // input [15 : 0] din
   .wr_en(wr_en), // input wr_en
   .rd_en(rd_en), // input rd_en
+  .prog_empty_thresh(prog_empty_thresh), // input [9 : 0] prog_empty_thresh
   .dout(dout), // output [31 : 0] dout
   .full(full), // output full
-  .empty(empty) // output empty
+  .empty(empty), // output empty
+  .prog_empty(prog_empty) // output prog_empty
 );
 // INST_TAG_END ------ End INSTANTIATION Template ---------
 

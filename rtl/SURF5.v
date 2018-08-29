@@ -125,10 +125,10 @@ module SURF5(
    
 	localparam [3:0] BOARDREV = 4'h1;
 	localparam [3:0] MONTH = 8;
-	localparam [7:0] DAY = 28;
+	localparam [7:0] DAY = 29;
 	localparam [3:0] MAJOR = 0;
-	localparam [3:0] MINOR = 5;
-	localparam [7:0] REVISION = 3;
+	localparam [3:0] MINOR = 6;
+	localparam [7:0] REVISION = 1;
 	localparam [31:0] VERSION = {BOARDREV, MONTH, DAY, MAJOR, MINOR, REVISION };
 	
 	wire [7:0] TD = {8{1'b0}};
@@ -400,6 +400,7 @@ module SURF5(
 	wire [11:0] readout_fifo_empty;
 	wire [14:0] phase_scanner_dbg;
 	wire readout_test_pattern_enable;
+	wire [9:0] readout_empty_size;
 	lab4d_controller u_controller( .clk_i(wbc_clk),.rst_i(wbc_rst),
 											 `WBS_CONNECT(l4_ctrl, wb),
 											 .sys_clk_i(sys_clk),
@@ -409,6 +410,7 @@ module SURF5(
 											 .trig_i(trigger_in),
 											 .readout_o(readout_begin_sysclk),
 											 .readout_fifo_rst_o(readout_fifo_rst),
+											 .readout_empty_size_o(readout_empty_size),
 											 .readout_fifo_empty_i(readout_fifo_empty),
 											 .readout_rst_o(readout_rst),
 											 .readout_header_o(readout_header_sysclk),
@@ -463,6 +465,7 @@ module SURF5(
 						  // FIX THIS
 						  .readout_rst_i(readout_rst),
 						  .readout_fifo_rst_i(readout_fifo_rst),
+						  .readout_empty_size_i(readout_empty_size),
 						  .readout_fifo_empty_o(readout_fifo_empty),
 						  .prescale_i(readout_prescale_sysclk),
 						  .complete_o(readout_complete_sysclk),
