@@ -166,6 +166,7 @@ module lab4d_ram(
 		genvar i;
 		for (i=0;i<12;i=i+1) begin : FIFOS
 			wire [15:0] data_input;
+			wire [31:0] data_output;
 			reg [15:0] data_in_reg = {16{1'b0}};
 			// Each LAB gets 512 entries of space, or 2048 bytes: so e.g. from 0000-07FF.
 			// So the lab selection picks off bits [14:11].
@@ -181,7 +182,8 @@ module lab4d_ram(
 			lab4d_fifo u_fifo(.wr_clk(sys_clk_i),.wr_en(data_wr_reg),.din(data_in_reg),
 									.rst(readout_fifo_rst_i),.prog_empty(readout_fifo_empty_o[i]),
 									.prog_empty_thresh(readout_empty_threshold),
-									.rd_clk(clk_i),.rd_en(lab_read[i]),.dout(data_out[i]));
+									.rd_clk(clk_i),.rd_en(lab_read[i]),.dout(data_output[i]));
+			assign data_out[i] = {data_output[15:0],data_output[31:16]};
 		end
 	endgenerate
 	
