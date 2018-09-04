@@ -182,7 +182,7 @@ module lab4d_ram(
 			lab4d_fifo u_fifo(.wr_clk(sys_clk_i),.wr_en(data_wr_reg),.din(data_in_reg),
 									.rst(readout_fifo_rst_i),.prog_empty(readout_fifo_empty_o[i]),
 									.prog_empty_thresh(readout_empty_threshold),
-									.rd_clk(clk_i),.rd_en(lab_read[i]),.dout(data_output[i]));
+									.rd_clk(clk_i),.rd_en(lab_read[i]),.dout(data_output));
 			assign data_out[i] = {data_output[15:0],data_output[31:16]};
 		end
 	endgenerate
