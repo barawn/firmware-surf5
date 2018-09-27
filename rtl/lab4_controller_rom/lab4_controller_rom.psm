@@ -216,7 +216,7 @@ runmode_loop:
 	; check trigger here
 	input	s0,	trigger_0
 	test	s0,	trigger_empty_bit
-	jump	Z,	readout
+	call	Z,	readout
 	input	s0,	control_port
 	test	s0,	runmode_request_bit
 	jump	NZ,	runmode_loop

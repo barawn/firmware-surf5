@@ -27,6 +27,7 @@ module lab4d_ram(
 		output dma_locked_o,
 		`WBS_NAMED_PORT(wbdma, 32, 16, 4),
 		input sys_clk_i,
+		input wclk_i,
 		// Readout test pattern control
 		input readout_test_pattern_i,
 		// Readout controls, from the LAB4 controller.
@@ -44,7 +45,9 @@ module lab4d_ram(
 		input [11:0] DOE_LVDS_N,
 		output [11:0] SS_INCR,
 		output [11:0] SRCLK_P,
-		output [11:0] SRCLK_N
+		output [11:0] SRCLK_N,
+		
+		output [15:0] sample_debug
     );
 	parameter [11:0] SRCLK_POLARITY = 12'b110000000011;
 	parameter [11:0] DOE_POLARITY = 12'b010000000100;
@@ -54,10 +57,11 @@ module lab4d_ram(
 	generate
 		genvar kk;
 		for (kk=0;kk<12;kk=kk+1) begin : DIFFLOOP
+			// Polarity swap means we just swap the Ns and Ps. The actual polarity of the SRCLK[kk] signal is swapped in the shift register.
 			if (SRCLK_POLARITY[kk] == 0) begin : POS
 				OBUFDS u_srclk_p(.I(SRCLK[kk]),.O(SRCLK_P[kk]),.OB(SRCLK_N[kk]));
 			end else begin : NEG
-				OBUFDS u_srclk_n(.I(~SRCLK[kk]),.O(SRCLK_N[kk]),.OB(SRCLK_P[kk]));
+				OBUFDS u_srclk_n(.I(SRCLK[kk]),.O(SRCLK_N[kk]),.OB(SRCLK_P[kk]));
 			end
 			if (DOE_POLARITY[kk] == 0) begin : DOEPOS
 				IBUFDS_DIFF_OUT u_doe_p(.I(DOE_LVDS_P[kk]),.IB(DOE_LVDS_N[kk]),.O(DOE[kk]),.OB(DOE_B[kk]));
@@ -193,13 +197,14 @@ module lab4d_ram(
 	wire dbg_srclk;
 	wire [6:0] sample_counter;
 	wire [3:0] bit_counter;
-	lab4d_data_shift_register_x12 u_shreg(.sys_clk_i(sys_clk_i),
+	lab4d_data_shift_register_x12 u_shreg(.sys_clk_i(sys_clk_i),.wclk_i(wclk_i),
 													  .readout_i(readout_i),.readout_rst_i(readout_rst_i),
 													  .done_o(complete_o),.dat_o(data),
 													  .dat_wr_o(data_wr),.prescale_i(prescale_i),
 													  .ss_incr_o(dbg_ss_incr),.srclk_o(dbg_srclk),
 													  .bit_counter_o(bit_counter),
-													  .sample_counter_o(sample_counter),.DOE(DOE),.SS_INCR(SS_INCR),.SRCLK(SRCLK));
+													  .sample_counter_o(sample_counter),.DOE(DOE),.SS_INCR(SS_INCR),.SRCLK(SRCLK),
+													  .sample_debug(sample_debug));
 
 	assign readout_debug_o[0 +: 12] = data[0 +: 12];
 	assign readout_debug_o[12] = DOE[0];

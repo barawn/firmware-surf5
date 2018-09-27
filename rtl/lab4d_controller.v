@@ -153,7 +153,8 @@ module lab4d_controller(
 	// bit 1: runmode request
 	// bit 2: runmode
 	// bit 3: running
-	// bit 7:4:  unused
+	// bit 5-4: unused
+	// bit 7-6: current bank 
 	// bit 8: wilk reset
 	// bit 14:9 unused
 	// bit 15: *readout* test pattern enable (not LAB4 test pattern enable! reads a counter into RAM. to test DMA)
@@ -165,7 +166,8 @@ module lab4d_controller(
 	reg [11:0] lab4_regclear = {12{1'b0}};
 	reg lab4_readout_test_pattern_enable = 0;
 	wire lab4_running;
-	assign lab4_control_register = {{4{1'b0}},lab4_regclear,lab4_readout_test_pattern_enable,{11{1'b0}},lab4_running,lab4_runmode,lab4_runmode_request,lab4_control_reset_request};
+	wire [1:0] cur_bank;
+	assign lab4_control_register = {{4{1'b0}},lab4_regclear,lab4_readout_test_pattern_enable,{7{1'b0}},cur_bank,{2{1'b0}},lab4_running,lab4_runmode,lab4_runmode_request,lab4_control_reset_request};
 
 	reg [3:0] readout_prescale = READOUT_PRESCALE_DEFAULT;
 	assign readout_prescale_register = {{28{1'b0}},readout_prescale};
@@ -470,6 +472,7 @@ module lab4d_controller(
 											  .start_i(trigger_start),
 											  .stop_i(trigger_stop),											  
 											  .ready_o(lab4_running),
+											  .current_bank_o(cur_bank),
 											  .trigger_i(trig_i),
 											  .force_trigger_i(force_trigger),
 											  

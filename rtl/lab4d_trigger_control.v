@@ -18,6 +18,8 @@ module lab4d_trigger_control(
 		input start_i,
 		input stop_i,
 		output ready_o,
+		// Bit of status.
+		output [1:0] current_bank_o,
 		// Configuration interface
 		input rst_i,
 		input [2:0] post_trigger_i,
@@ -73,7 +75,22 @@ module lab4d_trigger_control(
 	
 	flag_sync u_post_trigger_sync(.in_clkA(post_trigger_wr_i),.clkA(clk_i),.out_clkB(post_trigger_wr_sysclk),.clkB(sys_clk_i));
 	
+	reg enabled_sysclk_reg = 0;
+	reg update_bank_sysclk = 0;
+	wire update_bank;
+	reg [1:0] cur_bank = {2{1'b0}};
+	flag_sync u_update_bank(.in_clkA(update_bank_sysclk),.clkA(sys_clk_i),.out_clkB(update_bank),.clkB(clk_i));
+	
+	always @(posedge clk_i) begin
+		if (update_bank) cur_bank <= bank;
+	end
+	
 	always @(posedge sys_clk_i) begin
+		enabled_sysclk_reg <= enabled_sysclk;
+		// this goes high every time the bank changes or we start up.
+		// OR is a rising edge detection on enabled_sysclk
+		update_bank_sysclk <= (enable_next_bank) || (!enabled_sysclk_reg && enabled_sysclk);
+	
 		if (start_sysclk) start_seen <= 1;
 		else if (enabled_sysclk) start_seen <= 0;
 		
@@ -100,7 +117,7 @@ module lab4d_trigger_control(
 			trigger_address <= {window[0],bank,window[2:1]};
 
 		// Move to next buffer when we hit post trigger limit.
-		if (triggering && post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i) bank <= bank + 1;
+		if (enable_next_bank) bank <= bank + 1;
 		else if (!enabled_sysclk) bank <= {2{1'b0}};
 		
 		// Write the trigger into the FIFO when we hit the post trigger limit. trigger_write=1 and trigger_address latch happen at same time.
@@ -180,6 +197,8 @@ module lab4d_trigger_control(
 	assign trigger_debug_o[11] = enabled_sysclk;
 	assign trigger_debug_o[12] = start_sysclk;
 	assign trigger_debug_o[13] = stop_sysclk;
-	assign trigger_debug_o[15:14] = {2{1'b0}};
+	assign trigger_debug_o[14] = enable_next_bank;
+	assign trigger_debug_o[15] = 0;
 
+	assign current_bank_o = cur_bank;
 endmodule

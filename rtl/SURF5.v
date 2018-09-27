@@ -128,7 +128,7 @@ module SURF5(
 	localparam [7:0] DAY = 29;
 	localparam [3:0] MAJOR = 0;
 	localparam [3:0] MINOR = 6;
-	localparam [7:0] REVISION = 1;
+	localparam [7:0] REVISION = 4;
 	localparam [31:0] VERSION = {BOARDREV, MONTH, DAY, MAJOR, MINOR, REVISION };
 	
 	wire [7:0] TD = {8{1'b0}};
@@ -454,11 +454,13 @@ module SURF5(
 	//
 	wire dma_ram_lock;
 	wire [31:0] readout_debug;
+	wire [15:0] sample_debug;
 	lab4d_ram u_ram( .clk_i(wbc_clk), .rst_i(wbc_rst),
 						  `WBS_CONNECT(l4_ram, wb),
 						  .dma_lock_i(dma_ram_lock),
 						  `WBS_CONNECT(l4_dma, wbdma),
 						  .sys_clk_i(sys_clk),
+						  .wclk_i(wclk),
 						  .readout_i(readout_begin_sysclk),
 						  .readout_header_i(readout_header_sysclk),
 						  .readout_test_pattern_i(readout_test_pattern_enable),
@@ -474,7 +476,8 @@ module SURF5(
 						  .DOE_LVDS_N(DOE_LVDS_N),
 						  .SS_INCR(SS_INCR),
 						  .SRCLK_P(SRCLK_P),
-						  .SRCLK_N(SRCLK_N));
+						  .SRCLK_N(SRCLK_N),
+						  .sample_debug(sample_debug));
 
 	rfp_top u_rfp(.clk_i(wbc_clk),.rst_i(wbc_rst),
 					  `WBS_CONNECT(rfp, wb),
@@ -562,13 +565,13 @@ module SURF5(
 	
 	surf5_debug u_debug(.wbc_clk_i(wbc_clk),
 							  .clk0_i(wbc_clk),
-							  .clk1_i(sys_clk),
+							  .clk1_i(wclk),
 							  .clk_big_i(wbc_clk),
 							  `WBM_CONNECT(wbvio, wbvio),
 							  .clk0_debug0_i(pci_debug),
 							  .clk0_debug1_i(wbc_debug),
 							  .clk0_debug2_i(dma_debug),			// unused
-							  .clk0_debug3_i(lab4_debug2),	// unused
+							  .clk0_debug3_i(lab4_debug),	// unused
 							  .clk1_debug_i(sysclk_debug),		// unused
 							  .clk_big_debug_i(phase_scanner_dbg),
 							  .global_debug_o(global_debug));

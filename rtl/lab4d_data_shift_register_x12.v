@@ -12,6 +12,7 @@
 ////////////////////////////////////////////////////////////////////////////////
 module lab4d_data_shift_register_x12(
 		input sys_clk_i,
+		input wclk_i,
 		input readout_i,
 		input readout_rst_i,
 		output done_o,
@@ -24,8 +25,12 @@ module lab4d_data_shift_register_x12(
 		output [3:0] bit_counter_o,
 		input [11:0] DOE,
 		output [11:0] SRCLK,
-		output [11:0] SS_INCR
+		output [11:0] SS_INCR,
+		output [15:0] sample_debug
     );
+
+	parameter [11:0] SRCLK_POLARITY = 12'b110000000011;
+	
 	// Readout shift register in the LAB4D:
 	// Basically it's just clock out 12 bits and have SS_INCR low in the last clock cycle.
 	// However, there's a quirk: REGCLR, and presumedly power-on, both have the SS_INCR
@@ -166,8 +171,14 @@ module lab4d_data_shift_register_x12(
 			FDRE #(.INIT(1'b0)) u_shreg(.D(DOE[i]),.CE(1'b1),.C(sys_clk_i),.R(1'b0),.Q(shreg_msb));
 			(* IOB = "TRUE" *)
 			FDSE #(.INIT(1'b1)) u_ss_incr(.D(ss_incr_d),.CE(ss_incr_ce),.C(sys_clk_i),.S(readout_rst_i),.Q(SS_INCR[i]));
-			(* IOB = "TRUE" *)
-			FDRE #(.INIT(1'b0)) u_srclk(.D(srclk_d),.CE(srclk_ce),.C(sys_clk_i),.R(1'b0),.Q(SRCLK[i]));
+
+			if (SRCLK_POLARITY[i] == 0) begin : POS_POL
+				(* IOB = "TRUE" *)
+				FDRE #(.INIT(1'b0)) u_srclk(.D(srclk_d),.CE(srclk_ce),.C(sys_clk_i),.R(1'b0),.Q(SRCLK[i]));
+			end else begin : NEG_POL
+				(* IOB = "TRUE" *)
+				FDRE #(.INIT(1'b1)) u_srclk(.D(~srclk_d),.CE(srclk_ce),.C(sys_clk_i),.R(1'b0),.Q(SRCLK[i]));
+			end
 			always @(posedge sys_clk_i) begin : SHREG
 				if (shreg_ce) data_shreg <= {shreg_msb,data_shreg[10:1]};
 			end
@@ -180,4 +191,5 @@ module lab4d_data_shift_register_x12(
 	assign ss_incr_o = dbg_ss_incr;
 	assign dat_wr_o = dat_wr;
 	assign done_o = (state == DONE);
+	assign sample_debug = {16{1'b0}};
 endmodule
