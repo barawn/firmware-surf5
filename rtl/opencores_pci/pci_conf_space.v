@@ -154,7 +154,7 @@ module pci_conf_space
                 `endif
 					 `ifdef PCI_DISABLE_INTX
 						  ,
-						  disable_intx, interrupt_int
+						  disable_intx
 					 `endif
                 ) ;
 
@@ -357,7 +357,6 @@ reg [ 7: 0] spoci_cs_dat   ;
 `endif
 `ifdef PCI_DISABLE_INTX
 output	disable_intx;
-input		interrupt_int;
 `endif
 
 /*###########################################################################################################
@@ -882,7 +881,7 @@ end
         `endif
 
 			`ifdef PCI_DISABLE_INTX
-				or command_bit10 or interrupt_int
+				or command_bit10 or interrupt_out
 			`endif
     		)
     begin
@@ -891,7 +890,7 @@ end
     	8'h0: r_conf_data_out = { r_device_id, r_vendor_id } ;
     	8'h1: r_conf_data_out = { status_bit15_11, r_status_bit10_9, status_bit8, r_status_bit7, 1'h0, r_status_bit5, r_status_bit4,
 `ifdef PCI_DISABLE_INTX
-									 interrupt_int,
+									 interrupt_out,
 `else
 									 1'b0,
 `endif
@@ -1268,7 +1267,7 @@ always@(w_conf_address or
         or spoci_cs_nack or spoci_cs_write or spoci_cs_read or spoci_cs_adr or spoci_cs_dat
     `endif
 	 `ifdef PCI_DISABLE_INTX
-		  or command_bit10 or interrupt_int
+		  or command_bit10 or interrupt_out
 	 `endif
 		)
 begin
@@ -1282,7 +1281,7 @@ begin
 	begin
 		w_conf_data_out = { status_bit15_11, r_status_bit10_9, status_bit8, r_status_bit7, 1'h0, r_status_bit5, r_status_bit4, 
 `ifdef PCI_DISABLE_INTX
-							 interrupt_int,
+							 interrupt_out,
 `else
 							 1'b0,
 `endif

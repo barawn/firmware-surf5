@@ -221,6 +221,7 @@ module pci_bridge32
     // system error pin
     pci_serr_o,
     pci_serr_oe_o
+	
 
 `ifdef PCI_BIST
     ,
@@ -1390,8 +1391,7 @@ pci_conf_space configuration(
 									 
 									 `ifdef PCI_DISABLE_INTX
 										  ,
-										  .disable_intx	(disable_intx 	)	,
-										  .interrupt_int	(pci_inta_o && pci_inta_oe_o )
+										  .disable_intx	(disable_intx 	)
 									 `endif
                             ) ;
 
