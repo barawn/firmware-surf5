@@ -25,6 +25,7 @@ module test_dma_controller(
 		`WBS_NAMED_PORT(wbs, 32, 16, 4),
 		`WBM_NAMED_PORT(wbm, 32, 32, 4),
 		`WBM_NAMED_PORT(dmad, 32, 20, 4),
+		output dma_interrupt_o,
 		output [2:0] wbm_cti_o,
 		output [1:0] wbm_bte_o,
 		output [70:0] debug_o
@@ -69,18 +70,19 @@ module test_dma_controller(
 		
 		if (begin_dma) dma_complete_ok <= 0;
 		else if (state == DMA_ACK) dma_complete_ok <= 1;
+		else if (wbs_cyc_i && wbs_stb_i && wbs_we_i && (wbs_adr_i[3:2] == 2'b11) && wbs_dat_i[5]) dma_complete_ok <= 0;
 		
 		if (begin_dma) dma_err <= 0;
 		else if (wbm_err_i && state == DMA_ASSERT_CYC) dma_err <= 1;
-
+		else if (wbs_cyc_i && wbs_stb_i && wbs_we_i && (wbs_adr_i[3:2] == 2'b11) && wbs_dat_i[5]) dma_err <= 0;
 	end
 	assign wbs_dat_o = wishbone_registers[wbs_adr_i[3:2]];
 	assign wbs_rty_o = 0;
 	assign wbs_err_o = 0;
 	assign wbs_ack_o = ack;
-
-
-	assign control_register = {{13{1'b0}},state,{11{1'b0}},abort_dma, dma_err,dma_complete_ok,dma_active,begin_dma};
+	assign dma_interrupt_o = (dma_err || dma_complete_ok);
+	//% All writeable control register bits are flags, so you can just write '1' to the specific bit to do what you want. Write 1 to cr[5] clears interrupt.
+	assign control_register = {{13{1'b0}},state,{10{1'b0}},dma_interrupt_o, abort_dma, dma_err,dma_complete_ok,dma_active,begin_dma};
 
 
 	// this is a one-way DMA. Two state machines: a reader and a writer.

@@ -23,7 +23,8 @@ module surf5_debug(
 		input [70:0] clk0_debug3_i,
 		input [70:0] clk1_debug_i,
 		input [14:0] clk_big_debug_i,
-		output [7:0] global_debug_o
+		output [7:0] global_debug_o,
+		input [7:0] global_debug_i
     );
 
 	wire [70:0] ila0_debug_vec[3:0];
@@ -52,6 +53,7 @@ module surf5_debug(
 	assign vio_sync_out[32] = bridge_done_i;
 	assign vio_sync_out[33] = bridge_err_i;
 	// vio_sync_out[47:34] are available for... something
+	assign vio_sync_out[47:40] = global_debug_i;
 	
 	wbvio_bridge u_bridge(.clk_i(wbc_clk_i),.rst_i(1'b0),
 								 .wbvio_dat_i(bridge_dat_o),

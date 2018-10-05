@@ -124,11 +124,11 @@ module SURF5(
 	 );
    
 	localparam [3:0] BOARDREV = 4'h1;
-	localparam [3:0] MONTH = 8;
-	localparam [7:0] DAY = 29;
+	localparam [3:0] MONTH = 10;
+	localparam [7:0] DAY = 5;
 	localparam [3:0] MAJOR = 0;
 	localparam [3:0] MINOR = 6;
-	localparam [7:0] REVISION = 4;
+	localparam [7:0] REVISION = 6;
 	localparam [31:0] VERSION = {BOARDREV, MONTH, DAY, MAJOR, MINOR, REVISION };
 	
 	wire [7:0] TD = {8{1'b0}};
@@ -204,7 +204,9 @@ module SURF5(
 	
    //% Internal interrupts. Up to 31 can be used. 1 is used by SPI core.
    wire [30:0] 	    internal_interrupt;
-	assign internal_interrupt[30:0] = {31{1'b0}};
+	//% internal_interrupt[0] is used by the fifo below. 1 is used by the DMA engine. Others unused.
+	assign internal_interrupt[30:2] = {29{1'b0}};
+	
 	wire pci_interrupt;
 	
    //% System clock (100 MHz).
@@ -322,7 +324,7 @@ module SURF5(
 				`WBM_CONNECT(pcic, wbm),
 				`WBS_CONNECT(pcid, wbs),
 				.wbs_cti_i(pcid_cti),
-				.wbs_bte_i(pcid_bte)
+				.wbs_bte_i(pcid_bte)				
 				);
 
 	reg [31:0] pci_debug_data = {32{1'b0}};
@@ -443,7 +445,7 @@ module SURF5(
 											 .trigger_debug_o(trigger_debug),
 											 .phase_scanner_debug_o(phase_scanner_dbg)				 
 											 );
-										 
+	assign internal_interrupt[0] = !readout_fifo_empty;
 	// LAB4 RAM and serial receiver.
 	// The serial receiver just streams out 128x12 bits and writes them into
 	// block RAM connected to the WISHBONE bus.
@@ -488,14 +490,15 @@ module SURF5(
 
 	// DMA controller.
 	wire [70:0] dma_debug;
-	test_dma_controller u_dma_test( .clk_i(wbc_clk), .rst_i(wbc_rst),
+	wire dma_interrupt;
+	test_dma_controller u_dma_test( .clk_i(wbc_clk), .rst_i(wbc_rst),.dma_interrupt_o(dma_interrupt),
 					  `WBS_CONNECT(dmac, wbs),
 					  `WBM_CONNECT(pcid, wbm),
 					  `WBM_CONNECT(dmad, dmad),
 					  .wbm_cti_o(pcid_cti),
 					  .wbm_bte_o(pcid_bte),
 					  .debug_o(dma_debug));
-					  
+	assign internal_interrupt[1] = dma_interrupt;
 
    // TURFbus. This is the data path back to the TURF.
    // This also needs a slave port definition for the data side bus.
@@ -563,6 +566,12 @@ module SURF5(
 	assign sysclk_debug[16 +: 16] = trigger_debug;
 	assign sysclk_debug[32 +: 32] = readout_debug;
 	
+	wire [7:0] global_status;
+	assign global_status[0] = pci_inta_debug;
+	assign global_status[1] = 1'b0;
+	assign global_status[2] = pci_interrupt;
+	assign global_status[7:3] = {5{1'b0}};
+	
 	surf5_debug u_debug(.wbc_clk_i(wbc_clk),
 							  .clk0_i(wbc_clk),
 							  .clk1_i(wclk),
@@ -574,7 +583,8 @@ module SURF5(
 							  .clk0_debug3_i(lab4_debug),	// unused
 							  .clk1_debug_i(sysclk_debug),		// unused
 							  .clk_big_debug_i(phase_scanner_dbg),
-							  .global_debug_o(global_debug));
+							  .global_debug_o(global_debug),
+							  .global_debug_i(global_status));
 
 	assign SREQ_neg = 1;
 	assign SPI_D2 = 1;
