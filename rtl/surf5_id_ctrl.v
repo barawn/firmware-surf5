@@ -455,10 +455,28 @@ module surf5_id_ctrl(
 		
 		// To Do:
 		// -- PPS generation/selection/control.
-		// -- Ext trig generation/selection/control.
+		wire enable_exttrig_sysclk;
+		signal_sync u_enable_exttrig(.in_clkA(pps_sel_reg[16]),.clkA(clk_i),.out_clkB(enable_exttrig_sysclk),.clkB(sys_clk_o));
+		
+		reg [2:0] ext_trig_reg = {3{1'b0}};
+		reg ext_trig_sysclk = 0;
+		// this is about a 10 ms holdoff. Should be plenty.
+		reg [19:0] ext_trig_holdoff = {20{1'b0}};
+		wire [20:0] ext_trig_holdoff_plus_one = ext_trig_holdoff + 1;
+		reg ext_trig_total_enable = 0;
+		always @(posedge sys_clk_o) begin
+			ext_trig_reg <= {ext_trig_reg[1:0],EXT_TRIG};
+			ext_trig_sysclk <= !ext_trig_reg[1] && ext_trig_reg[0] && ext_trig_total_enable;
+
+			if (!enable_exttrig_sysclk) ext_trig_total_enable <= 0;
+			else if (ext_trig_holdoff_plus_one[20] && enable_exttrig_sysclk) ext_trig_total_enable <= 1;
+			
+			if (enable_exttrig_sysclk && !ext_trig_total_enable) ext_trig_holdoff <= ext_trig_holdoff_plus_one;
+			else ext_trig_holdoff <= {20{1'b0}};
+		end
 		assign pps_o = 0;
 		assign pps_sysclk_o = 0;
 		assign ext_trig_o = 0;
-		assign ext_trig_sysclk_o = 0;
+		assign ext_trig_sysclk_o = ext_trig_sysclk;
 		assign sync_o = sync_reg;
 endmodule

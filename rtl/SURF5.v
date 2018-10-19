@@ -123,12 +123,12 @@ module SURF5(
 		output			SPI_D3
 	 );
    
-	localparam [3:0] BOARDREV = 4'h1;
+	localparam [3:0] BOARDREV = 4'h0;
 	localparam [3:0] MONTH = 10;
-	localparam [7:0] DAY = 5;
+	localparam [7:0] DAY = 19;
 	localparam [3:0] MAJOR = 0;
-	localparam [3:0] MINOR = 6;
-	localparam [7:0] REVISION = 6;
+	localparam [3:0] MINOR = 8;
+	localparam [7:0] REVISION = 2;
 	localparam [31:0] VERSION = {BOARDREV, MONTH, DAY, MAJOR, MINOR, REVISION };
 	
 	wire [7:0] TD = {8{1'b0}};
@@ -403,6 +403,7 @@ module SURF5(
 	wire [14:0] phase_scanner_dbg;
 	wire readout_test_pattern_enable;
 	wire [9:0] readout_empty_size;
+	wire trigger_in = global_ext_trig_sysclk;
 	lab4d_controller u_controller( .clk_i(wbc_clk),.rst_i(wbc_rst),
 											 `WBS_CONNECT(l4_ctrl, wb),
 											 .sys_clk_i(sys_clk),
@@ -491,7 +492,7 @@ module SURF5(
 	// DMA controller.
 	wire [70:0] dma_debug;
 	wire dma_interrupt;
-	test_dma_controller u_dma_test( .clk_i(wbc_clk), .rst_i(wbc_rst),.dma_interrupt_o(dma_interrupt),
+	batch_dma_controller u_dma_batch( .clk_i(wbc_clk), .rst_i(wbc_rst),.dma_interrupt_o(dma_interrupt),
 					  `WBS_CONNECT(dmac, wbs),
 					  `WBM_CONNECT(pcid, wbm),
 					  `WBM_CONNECT(dmad, dmad),

@@ -211,13 +211,22 @@ module lab4d_controller(
 	wire trigger_empty;
 	wire trigger_start;
 	wire trigger_stop;
-	wire [5:0] trigger_address;
+	wire [4:0] trigger_address;
 	reg trigger_clear = 0;
 	reg force_trigger = 0;
 	reg [2:0] post_trigger = {3{1'b0}};
 	reg post_trigger_wr = 0;
 	reg trigger_reset = 0;
-	assign trigger_register = {{13{1'b0}},post_trigger,{8{1'b0}},trigger_empty,1'b0,trigger_address};
+	reg [1:0] trigger_repeat = {2{1'b0}};
+	reg trigger_repeat_wr = 0;
+	// trigger register:
+	// bit [07:00] = picoblaze stuff
+	// bits[15:08] = unused
+	// bits[22:16] = post_trigger count
+	// bits[23]    = write post trigger count
+	// bits[30:24] = trigger repeat count
+	// bits[31]    = write trigger repeat count
+	assign trigger_register = {{6{1'b0}},trigger_repeat,{5{1'b0}},post_trigger,{8{1'b0}},trigger_empty,2'b00,trigger_address};
 
 
 	// Readout Register:
@@ -425,14 +434,19 @@ module lab4d_controller(
 		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:0] == 7'h54)) begin
 			trigger_clear <= wb_dat_i[0];
 			force_trigger <= wb_dat_i[1];
-			if (wb_dat_i[31]) begin 
+			if (wb_dat_i[23]) begin 
 				post_trigger_wr <= 1;
 				post_trigger <= wb_dat_i[18:16];
+			end
+			if (wb_dat_i[31]) begin
+				trigger_repeat_wr <= 1;
+				trigger_repeat <= wb_dat_i[25:24];
 			end
 		end else begin
 			trigger_clear <= 0;
 			force_trigger <= 0;
 			post_trigger_wr <= 0;
+			trigger_repeat_wr <= 0;
 		end
 
 		if (wb_cyc_i && wb_stb_i && wb_we_i && (wb_adr_i[6:0] == 7'h7C)) begin
@@ -479,6 +493,8 @@ module lab4d_controller(
 											  .rst_i(trigger_reset),
 											  .post_trigger_i(post_trigger),
 											  .post_trigger_wr_i(post_trigger_wr),
+											  .trigger_repeat_i(trigger_repeat),
+											  .trigger_repeat_wr_i(trigger_repeat_wr),
 											  											  
 											  .trigger_empty_o(trigger_empty),
 											  .trigger_rd_i(trigger_read),

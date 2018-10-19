@@ -36,7 +36,7 @@ PINATTR PinName rd_en
 PINATTR Polarity IN
 LINE Wide 832 336 800 336
 PIN 832 336 RIGHT 36
-PINATTR PinName prog_empty_thresh[9:0]
+PINATTR PinName prog_empty_thresh[10:0]
 PINATTR Polarity IN
 LINE Normal 832 496 800 496
 PIN 832 496 RIGHT 36

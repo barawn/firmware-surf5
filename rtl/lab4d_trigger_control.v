@@ -24,6 +24,8 @@ module lab4d_trigger_control(
 		input rst_i,
 		input [2:0] post_trigger_i,
 		input post_trigger_wr_i,
+		input [1:0] trigger_repeat_i,
+		input trigger_repeat_wr_i,
 		
 		// Triggering interface
 		input trigger_i,
@@ -32,12 +34,14 @@ module lab4d_trigger_control(
 		// Trigger FIFO read interface
 		output trigger_empty_o,
 		input trigger_rd_i,
-		output [5:0] trigger_address_o,
+		output [4:0] trigger_address_o,
 		input trigger_clear_i,
 		
 		output [15:0] trigger_debug_o,
 		output [59:0] WR
     );
+	reg pre_sys_clk_div4_flag = 0;
+	reg [1:0] sys_clk_counter = {2{1'b0}};
 
 	reg [1:0] bank = {2{1'b0}};
 	wire [2:0] bank_plus_one = bank + 1;
@@ -51,6 +55,11 @@ module lab4d_trigger_control(
 	
 	reg [2:0] post_trigger_counter = {3{1'b0}};
 	reg [2:0] post_trigger_limit = {3{1'b0}};
+	
+	reg [1:0] trigger_repeat = {2{1'b0}};
+	reg [1:0] repeat_count = {2{1'b0}};
+	reg do_repeat = 0;
+	reg reset_post_trigger = 0;
 	
 	reg [5:0] trigger_address = {6{1'b0}};	
 	reg triggering = 0;
@@ -66,6 +75,7 @@ module lab4d_trigger_control(
 	wire force_trigger_sysclk;	
 	wire trigger_clear_sysclk;
 	wire post_trigger_wr_sysclk;
+	wire trigger_repeat_wr_sysclk;
 	
 	flag_sync u_start_sync(.in_clkA(start_i),.clkA(clk_i),.out_clkB(start_sysclk),.clkB(sys_clk_i));
 	flag_sync u_stop_sync(.in_clkA(stop_i),.clkA(clk_i),.out_clkB(stop_sysclk),.clkB(sys_clk_i));
@@ -74,7 +84,7 @@ module lab4d_trigger_control(
 	signal_sync u_enabled_sync(.in_clkA(enabled_sysclk),.clkA(sys_clk_i),.out_clkB(ready_o),.clkB(clk_i));
 	
 	flag_sync u_post_trigger_sync(.in_clkA(post_trigger_wr_i),.clkA(clk_i),.out_clkB(post_trigger_wr_sysclk),.clkB(sys_clk_i));
-	
+	flag_sync u_trigger_repeat_sync(.in_clkA(trigger_repeat_wr_i),.clkA(clk_i),.out_clkB(trigger_repeat_wr_sysclk),.clkB(sys_clk_i));
 	reg enabled_sysclk_reg = 0;
 	reg update_bank_sysclk = 0;
 	wire update_bank;
@@ -86,6 +96,20 @@ module lab4d_trigger_control(
 	end
 	
 	always @(posedge sys_clk_i) begin
+		if (sys_clk_div4_flag_i) sys_clk_counter <= {2{1'b0}};
+		else sys_clk_counter <= sys_clk_counter + 1;
+	
+		// clk div4_flag counter pre_div4_flag
+		// 0   1         x       0
+		// 1   0         0       0
+		// 2   0         1       0
+		// 3   0         2       1
+		// 4   1         3       0
+		// 5   0         0       0
+	
+		// flag when div4_flag is *about* to go
+		pre_sys_clk_div4_flag <= (sys_clk_counter == 2'b01);
+	
 		enabled_sysclk_reg <= enabled_sysclk;
 		// this goes high every time the bank changes or we start up.
 		// OR is a rising edge detection on enabled_sysclk
@@ -110,7 +134,7 @@ module lab4d_trigger_control(
 		
 		// If we get a trigger, set to triggering state. Once we hit the post-trigger limit, exit that state.
 		if (trigger_i || force_trigger_sysclk) triggering <= 1;
-		else if (post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i) triggering <= 0;
+		else if (post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i && !do_repeat) triggering <= 0;
 
 		// Capture address when we transition. Trigger address indicates LAST window.
 		if (triggering && post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i) 
@@ -124,13 +148,33 @@ module lab4d_trigger_control(
 		if (triggering && post_trigger_counter == post_trigger_limit && sys_clk_div4_flag_i) trigger_write <= 1;
 		else trigger_write <= 0;
 
-		// Count the post trigger counter when triggering.
-		if (triggering && sys_clk_div4_flag_i) post_trigger_counter <= post_trigger_counter + 1;
-		else if (!triggering) post_trigger_counter <= {3{1'b0}};
+		// Count the post trigger counter when triggering, but not when repeating. (do_repeat essentially acts as another trigger)
+		if (!triggering || do_repeat) post_trigger_counter <= {3{1'b0}};
+		else if (sys_clk_div4_flag_i) post_trigger_counter <= post_trigger_counter + 1;
 
 		// Grab the limit from the control interface.
-		if (post_trigger_wr_sysclk) post_trigger_limit <= post_trigger_i;		
+		if (post_trigger_wr_sysclk || reset_post_trigger) post_trigger_limit <= post_trigger_i;		
+		else if (triggering && do_repeat) post_trigger_limit <= 7;
 
+		if (trigger_repeat_wr_sysclk) trigger_repeat <= trigger_repeat_i;
+
+		// this indicates that the trigger should be repeated (continued readout)
+		// The logic here ensures that do_repeat is definitely high when triggering goes high.
+		if ((triggering || trigger_i || force_trigger_sysclk) && (post_trigger_counter == post_trigger_limit) && pre_sys_clk_div4_flag && (repeat_count != trigger_repeat))
+			do_repeat <= 1;
+		else
+			do_repeat <= 0;
+
+		if (triggering && (post_trigger_counter == post_trigger_limit) && pre_sys_clk_div4_flag && (repeat_count == trigger_repeat))
+			reset_post_trigger <= 1;
+		else
+			reset_post_trigger <= 0;
+
+		if (triggering && (post_trigger_counter == post_trigger_limit) && sys_clk_div4_flag_i && do_repeat)
+			repeat_count <= repeat_count + 1;
+		else if (!triggering)
+			repeat_count <= {2{1'b0}};
+				
 		// DO SOMETHING SMART HERE TO DISABLE TRIGGERS!!
 		if (trigger_write) bank_full_counter <= bank_full_counter + 1;
 		else if (trigger_clear_sysclk) bank_full_counter <= bank_full_counter - 1;

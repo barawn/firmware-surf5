@@ -32,7 +32,7 @@ module test_dma_controller(
     );
 
 	parameter [31:0] ID = "TEST";
-	
+
 	reg [31:0] target_begin_address = {32{1'b0}};
 	reg [31:0] target_end_address = {32{1'b0}};
 	reg [8:0] transfer_length = {9{1'b0}};
@@ -71,7 +71,7 @@ module test_dma_controller(
 		if (begin_dma) dma_complete_ok <= 0;
 		else if (state == DMA_ACK) dma_complete_ok <= 1;
 		else if (wbs_cyc_i && wbs_stb_i && wbs_we_i && (wbs_adr_i[3:2] == 2'b11) && wbs_dat_i[5]) dma_complete_ok <= 0;
-		
+
 		if (begin_dma) dma_err <= 0;
 		else if (wbm_err_i && state == DMA_ASSERT_CYC) dma_err <= 1;
 		else if (wbs_cyc_i && wbs_stb_i && wbs_we_i && (wbs_adr_i[3:2] == 2'b11) && wbs_dat_i[5]) dma_err <= 0;

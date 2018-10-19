@@ -13,7 +13,7 @@ CONSTANT	ramp_0,	      17
 CONSTANT	trigger_0,    14
 CONSTANT        header_0,     15
 CONSTANT	readout_0,    16
-
+CONSTANT reset_request_bit, 01
 CONSTANT	runmode_request_bit,	02
 CONSTANT	runmode_bit,		04
 CONSTANT	user_serial_request_bit,	80
@@ -52,6 +52,8 @@ reset:
 main:
 	; check runmode requests
 	input	s0,	control_port
+	test  s0,   reset_request_bit
+	jump  NZ,   reset_request
 	test	s0,	runmode_request_bit
 	jump	NZ,	runmode_request
 	input	s0,	user_3
@@ -202,6 +204,17 @@ readout_lp6:
 readout_complete:
 	return
 
+reset_request:
+	; Disable the runmode bit.
+	load	s0, trigger_stop_bit
+	output s0, trigger_0
+	; Reset the trigger FIFO.
+	load	s0, trigger_reset_bit
+	output s0, trigger_0
+	; and clear the reset request
+	load	s0, 00
+	output s0, control_port
+	jump	main
 
 runmode_request:
 	; Reset. This clears the trigger FIFO.
